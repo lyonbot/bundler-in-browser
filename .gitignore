@@ -1,0 +1,8 @@
+.DS_Store
+.vscode/
+node_modules/
+dist/
+*.log
+*.tar.gz
+*.tgz
+# package-lock.json
