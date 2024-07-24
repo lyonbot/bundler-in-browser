@@ -1,7 +1,7 @@
 import path from "path";
 import TarStream from 'tar-stream';
 import type { IFs } from "memfs";
-import { chunked, decodeUTF8, memoAsync } from "./utils.js";
+import { chunked, decodeUTF8, log, memoAsync } from "./utils.js";
 
 export namespace MiniNPM {
   export interface Options {
@@ -43,6 +43,8 @@ export class MiniNPM {
 
     const tarballUrl = (await this.getPackageVersions(packageName)).distTags['latest'];
 
+    log('Installing ', packageName)
+
     const { packageJson } = await this.pourTarball(tarballUrl, directory);
     const index = this.index[packageName] ||= [];
     index.push({
@@ -52,6 +54,8 @@ export class MiniNPM {
         ...packageJson.peerDependencies,
       },
     })
+
+    log('Installed ', packageName, '@', packageJson.version)
 
     // auto download dependencies, in parallel
     const deps = Object.keys(packageJson.dependencies || {})

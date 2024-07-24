@@ -1,3 +1,5 @@
+import dayjs from "dayjs";
+
 export function decodeUTF8(buf: Uint8Array) {
   return new TextDecoder().decode(buf);
 }
@@ -27,4 +29,8 @@ export function memoAsync<A extends any[], T>(fn: (...args: A) => Promise<T>) {
     cache.set(key, cached);
     return cached;
   }
+}
+
+export function log(...args: any[]) {
+  console.log(dayjs().format(), ...args);
 }

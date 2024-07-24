@@ -8,6 +8,9 @@ dependencies:
   buffer:
     specifier: ^6.0.3
     version: 6.0.3
+  dayjs:
+    specifier: ^1.11.12
+    version: 1.11.12
   enhanced-resolve:
     specifier: ^5.17.0
     version: 5.17.0
@@ -523,6 +526,10 @@ packages:
       readdirp: 3.6.0
     optionalDependencies:
       fsevents: 2.3.3
+
+  /dayjs@1.11.12:
+    resolution: {integrity: sha512-Rt2g+nTbLlDWZTwwrIXjy9MeiZmSDI375FvZs72ngxx8PDC6YXOeR3q5LAuPzjZQxhiWdRKac7RKV+YyQYfYIg==}
+    dev: false
 
   /define-data-property@1.1.4:
     resolution: {integrity: sha512-rBMvIzlpA8v6E+SJZoo++HAYqsLrkg7MSfIinMPFhmkorw7X+dOXVJQs+QT69zGkzMyfDnIMN2Wid1+NbL3T+A==}

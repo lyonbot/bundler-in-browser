@@ -10,9 +10,14 @@ const container = document.createElement('div');
 document.body.appendChild(container);
 const root = createRoot(container);
 
+import("./dynamic1.js").then(d => { console.log('dayjs=',d) })
+
 import SqlEditor from './sqlEditor.jsx';
 root.render(React.createElement(SqlEditor));
-
+  `,
+  "/dynamic1.js": `
+import dayjs from "dayjs";
+export { dayjs }
   `,
   "/sqlEditor.jsx": `
 import React, { useState } from 'react';
@@ -64,6 +69,8 @@ const fs = new Proxy({}, {
   },
 })
 
+window.fs = fs;
+
 const compiler = new BundlerInBrowser(fs);
 await compiler.initialize();
 
@@ -76,4 +83,3 @@ fn(m, r => {
   throw new Error('require not supported');
 });
 
-window.fs = fs;
