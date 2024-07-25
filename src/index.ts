@@ -1,14 +1,10 @@
 import './dirty-stuff/monkey-patch.js';
 
 import esbuild from "esbuild-wasm";
-import esbuildWasm from "esbuild-wasm/esbuild.wasm?url";
-import { create as createResolver, type ResolveContext } from 'enhanced-resolve'
+import { create as createResolver } from 'enhanced-resolve'
 import { type IFs } from "memfs";
 import { MiniNPM } from "./npm.js";
-import { decodeUTF8, log } from './utils.js';
-import path from 'path';
-
-let initPromise: Promise<void> | undefined;
+import { log, wrapCommonJS } from './utils.js';
 
 export interface VendorBundleResult {
   hash: string; // concat of sorted externalDeps
@@ -29,15 +25,22 @@ function pathToNpmPackage(fullPath: string): [packageName: string, importedPath:
 export class BundlerInBrowser {
   public readonly fs: IFs;
 
-  async initialize() {
-    if (!initPromise) {
-      initPromise = esbuild.initialize({
-        wasmURL: esbuildWasm
+  initialized: Promise<void> | false = false;
+  private async assertInitialized() {
+    if (!this.initialized) throw new Error('BundlerInBrowser not initialized');
+    await this.initialized;
+  }
+
+  async initialize(opt: { esbuildWasmURL: string | URL }) {
+    if (!this.initialized) {
+      this.initialized = esbuild.initialize({
+        wasmURL: opt.esbuildWasmURL
+        // wasmURL: esbuildWasm
         // wasmModule: await WebAssembly.compileStreaming(fetch('/node_modules/esbuild-wasm/esbuild.wasm'))
         // wasmURL: "https://cdn.jsdelivr.net/npm/esbuild-wasm@0.23.0/esbuild.wasm",
       });
     }
-    await initPromise;
+    await this.initialized;
   }
 
   public npmRequired: string[] = [] // only package names
@@ -64,7 +67,7 @@ export class BundlerInBrowser {
         setup(build) {
           build.onResolve({ filter: /.*/ }, async (args) => {
             let fullPath = args.path;
-            if (/^(https?:)\/\//.test(fullPath)) return { external: true, path: fullPath }; // URL is external
+            if (/^(https?:)\/\/|^data:/.test(fullPath)) return { external: true, path: fullPath }; // URL is external
 
             return await new Promise((done, reject) => {
               resolve(args.resolveDir, fullPath, (err, res) => {
@@ -101,27 +104,6 @@ export class BundlerInBrowser {
         }
       })
     }
-    const sassLoaderPlugin = (): esbuild.Plugin => {
-      return ({
-        name: "sass-loader",
-        setup(build) {
-          build.onLoad({ filter: /.scss$/ }, async (args) => {
-            const sass = await import('sass');
-
-            let fullPath = args.path;
-            let contents = fs.readFileSync(fullPath).toString('utf8');
-            let result = await sass.compileStringAsync(contents, {
-              style: 'expanded'
-            });
-
-            return {
-              contents: result.css,
-              loader: fullPath.endsWith('.module.scss') ? 'local-css' : 'css'
-            }
-          })
-        }
-      })
-    }
     const commonLoaderPlugin = (): esbuild.Plugin => {
       const builtinLoaders = ['js', 'jsx', 'tsx', 'ts', 'css', 'json', 'text'] as const
       return ({
@@ -149,7 +131,6 @@ export class BundlerInBrowser {
 
     this.userCodePlugins.push(
       npmCollectPlugin(),
-      sassLoaderPlugin(),
     )
 
     this.vendorPlugins.push(
@@ -165,12 +146,17 @@ export class BundlerInBrowser {
 
   prevVendorBundle: undefined | VendorBundleResult
   async bundleVendor() {
+    await this.assertInitialized();
+
     const externalDeps = Array.from(this.externalDeps)
     const hash = externalDeps.sort().join(',')
 
     if (this.prevVendorBundle?.hash === hash) return this.prevVendorBundle;
+
+    // wait for all npm installs to finish
     await Promise.all(this.npmRequired.map(p => this.npm.install(p)));
 
+    // create a new bundle
     const vendor: VendorBundleResult = {
       hash,
       externalDeps,
@@ -178,43 +164,53 @@ export class BundlerInBrowser {
       css: '',
     }
 
-    const fs = this.fs;
-    const workDir = `/@@vendor`
-    fs.mkdirSync(workDir, { recursive: true });
+    const workDir = `/vendor_dll`
 
-    let entryFilePath = `${workDir}/index.js`
-    let entrySourceFilePath = `${workDir}/source.js`
-    let entryJs = 'exports.deps = {\n'
+    let entryPath = `${workDir}/source.js`
+    let entryPathRegex = new RegExp(`^${entryPath}$`)
+    let entryContent = 'exports.deps = {\n'
 
     for (let i = 0; i < externalDeps.length; i++) {
       const dep = externalDeps[i];
-      entryJs += `"${dep}": require("${dep}"),\n`
+      entryContent += `"${dep}": require("${dep}"),\n`
     }
-    entryJs += '};'
-    fs.writeFileSync(entrySourceFilePath, entryJs);
+    entryContent += '};'
 
     const buildOutput = await esbuild.build({
-      entryPoints: [entrySourceFilePath],
+      entryPoints: [entryPath],
       bundle: true,
+      outdir: workDir,
       write: false,
       format: "cjs",
       target: "es2022",
       platform: "browser",
       plugins: [
+        {
+          name: 'vendor-entry',
+          setup(build) {
+            build.onResolve({ filter: entryPathRegex }, (args) => {
+              return { path: entryPath }
+            })
+            build.onLoad({ filter: entryPathRegex }, (args) => {
+              if (args.path === entryPath) return { contents: entryContent, loader: 'js' };
+              return null
+            })
+          }
+        },
         ...this.vendorPlugins,
         ...this.commonPlugins,
       ],
     })
 
-    vendor.js = buildOutput.outputFiles[0].text;
+    vendor.js = buildOutput.outputFiles.find(x => x.path.endsWith('.js'))?.text || '';
+    vendor.css = buildOutput.outputFiles.find(x => x.path.endsWith('.css'))?.text || '';
+
     this.prevVendorBundle = vendor;
     return vendor;
   }
 
   async compile() {
-    await this.initialize();
-    const fs = this.fs;
-
+    await this.assertInitialized();
     log('Start compiling')
 
     this.npmRequired.length = 0;
@@ -238,11 +234,9 @@ export class BundlerInBrowser {
       // chunkNames: "chunk-[name]-[hash]",
     })
 
-    log('Compile done');
-    fs.mkdirSync('/user', { recursive: true });
-    phase1output.outputFiles.forEach(f => {
-      fs.writeFileSync(f.path, f.contents)
-    })
+    let userJs = phase1output.outputFiles.find(x => x.path.endsWith('.js'))?.text || '';
+    let userCss = phase1output.outputFiles.find(x => x.path.endsWith('.css'))?.text || '';
+    log('user code compile done', phase1output);
 
     // phase 2: bundle vendor, including npm install
     // (may be skipped, if dep not changed)
@@ -251,20 +245,30 @@ export class BundlerInBrowser {
     log('vendor bundle done', this.prevVendorBundle)
 
     // phase 3: bundle final
-    let phase3Code = [
+    const dlls = [vendorBundle]
+    const finalJs = [
       `var require = (()=>{`,
-      ` var module = {exports:{}},exports=module.exports,require=null;`,
-      vendorBundle.js,
-      ' return (deps => name => {',
-      '   return deps[name];',
-      ' })(module.exports.deps)',
+      ` const deps = {}, require = name => {`,
+      `   return deps[name];`,
+      ` };`,
+      ...dlls.map(dll => `Object.assign(deps, ${wrapCommonJS(dll.js)}.deps);`),
+      ` return require;`,
       '})();',
-      '',
-      phase1output.outputFiles[0].text,
+      userJs,
     ].join('\n')
-    log('phase3output', { phase3Code });
+    const finalCss = [
+      ...dlls.map(dll => dll.css),
+      userCss,
+    ].join('\n')
 
-    return phase3Code
+    log('phase3output', { js: finalJs, css: finalCss });
+
+    return {
+      js: finalJs,
+      css: finalCss,
+      npmRequired: this.npmRequired.slice(),
+      externalDeps: this.externalDeps.slice(),
+    }
   }
 }
 

@@ -1,8 +1,15 @@
 import { Volume } from "memfs";
 import { BundlerInBrowser } from "../src/index";
+import esbuildWasmURL from "esbuild-wasm/esbuild.wasm?url";
+import installSassPlugin from "../src/plugins/sass";
+import { wrapCommonJS } from "../src/utils";
 
 const fsRaw = (Volume.fromJSON({
   "/index.js": `
+import "github-markdown-css/github-markdown-dark.css";
+import * as S from "./base.module.scss";
+console.log(S);
+
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -14,6 +21,11 @@ import("./dynamic1.js").then(d => { console.log('dayjs=',d) })
 
 import SqlEditor from './sqlEditor.jsx';
 root.render(React.createElement(SqlEditor));
+  `,
+  "/base.module.scss": `
+.hello {
+  color: red;
+}
   `,
   "/dynamic1.js": `
 import dayjs from "dayjs";
@@ -72,14 +84,18 @@ const fs = new Proxy({}, {
 window.fs = fs;
 
 const compiler = new BundlerInBrowser(fs);
-await compiler.initialize();
-
-const out = await compiler.compile();
-const fn = new Function('module', 'require', 'var exports = module.exports = {};\n' + out);
-
-const m = { exports: {} };
-fn(m, r => {
-  console.log('require', r);
-  throw new Error('require not supported');
+await compiler.initialize({
+  esbuildWasmURL: esbuildWasmURL
 });
 
+installSassPlugin(compiler);
+
+const out = await compiler.compile();
+console.log('compiled', out);
+
+const style = document.createElement('style');
+document.head.appendChild(style);
+style.textContent = out.css;
+
+const fn = new Function(wrapCommonJS(out.js));
+fn();

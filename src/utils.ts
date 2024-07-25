@@ -1,5 +1,14 @@
 import dayjs from "dayjs";
 
+/** 
+ * given a cjs module source, wrap it into a CallExpression, which returns `module.exports` 
+ * 
+ * beware `require` is not defined inside.
+ */
+export function wrapCommonJS(code: string) {
+  return `((modules => ((exports=>{${code}\n})(modules.exports), modules.exports))({exports:{}}))`
+}
+
 export function decodeUTF8(buf: Uint8Array) {
   return new TextDecoder().decode(buf);
 }
