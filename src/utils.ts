@@ -1,5 +1,9 @@
 import dayjs from "dayjs";
 
+export function mapValues<T, V>(obj: Record<string, T>, fn: (v: T, k: string) => V) {
+  return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, fn(v, k)]));
+}
+
 /** 
  * given a cjs module source, wrap it into a CallExpression, which returns `module.exports` 
  * 

@@ -154,7 +154,8 @@ export class BundlerInBrowser {
     if (this.prevVendorBundle?.hash === hash) return this.prevVendorBundle;
 
     // wait for all npm installs to finish
-    await Promise.all(this.npmRequired.map(p => this.npm.install(p)));
+    await this.npm.install(Array.from(this.npmRequired));
+    throw new Error('stop')
 
     // create a new bundle
     const vendor: VendorBundleResult = {

@@ -6,6 +6,10 @@ import { wrapCommonJS } from "../src/utils";
 
 const fsRaw = (Volume.fromJSON({
   "/index.js": `
+import "cross-spawn";
+import "which"
+`,
+  "/index2.js": `
 import "github-markdown-css/github-markdown-dark.css";
 import * as S from "./base.module.scss";
 console.log(S);

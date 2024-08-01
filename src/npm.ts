@@ -1,7 +1,8 @@
 import path from "path";
-import TarStream from 'tar-stream';
+import TarStream, { pack } from 'tar-stream';
 import type { IFs } from "memfs";
-import { chunked, decodeUTF8, log, memoAsync } from "./utils.js";
+import { chunked, decodeUTF8, log, mapValues, memoAsync } from "./utils.js";
+import semver from "semver";
 
 export namespace MiniNPM {
   export interface Options {
@@ -32,16 +33,80 @@ export class MiniNPM {
     };
   }
 
+  async install(packageNames: string[]) {
+    const getPackageMeta = this.getPackageMeta.bind(this);
+    class PackageWithVersion {
+      id: string;
+      dependents: string[] = [];
+      dependencies: Record<string, string> = {};
+
+      constructor(public name: string, public version: string) {
+        this.id = `${name}@${version}`;
+      }
+    }
+
+    const requiredPackages = {} as { [name: string]: { [version: string]: PackageWithVersion } };
+
+    // ---- scan dependencies ----
+
+    const ROOT = '<root>@0.0.0';
+    const queue = packageNames.map(n => [n, 'latest', [ROOT]] as [name: string, version: string, requiredByTrace: string[]]);
+    while (queue.length) {
+      const [packageName, versionRangeOrTag, trace] = queue.pop()!;
+      log('Scanning ', packageName, '@', versionRangeOrTag, ' from', trace.join(' -> '))
+
+      const dependent = trace[trace.length - 1]!;
+      const packageMeta = await getPackageMeta(packageName);
+      const versionRange = packageMeta.distTags[versionRangeOrTag]?.version || versionRangeOrTag;
+      const compatibleVersion = semver.maxSatisfying(packageMeta.versionList, versionRange);
+
+      if (!compatibleVersion) {
+        throw new Error(`No compatible version found for ${packageName}@${versionRangeOrTag}`);
+      }
+      
+      // --- write to dependent's info
+
+
+      // --- check if new dep is already installed
+
+      const versions = requiredPackages[packageName] ||= {};
+      const exists = versions[compatibleVersion];
+      if (exists) {
+        // already scanned
+        exists.dependents.push(dependent)
+        continue;
+      }
+
+      // add sub-dependencies to queue
+
+      const pkg = new PackageWithVersion(packageName, compatibleVersion);
+      versions[compatibleVersion] = pkg;
+      pkg.dependents.push(dependent);
+
+      const dependencies = packageMeta.versions[compatibleVersion].dependencies;
+      const newPath = [...trace, pkg.id];
+      pkg.dependencies = dependencies;
+      Object.entries(dependencies).forEach(([name, versionRange]) => {
+        queue.push([name, versionRange as string, newPath]);
+      })
+    }
+
+    // ---- build ideal tree ----
+    // TODO:
+
+    debugger;
+  }
+
   /**
    * install a npm package
    * 
    * if already installing, return previous promise
    */
-  install = memoAsync(async (packageName: string) => {
+  install2 = memoAsync(async (packageName: string) => {
     const directory = `${this.options.nodeModulesDir}/${packageName}`;
     if (this.fs.existsSync(directory)) return;
 
-    const tarballUrl = (await this.getPackageVersions(packageName)).distTags['latest'];
+    const tarballUrl = (await this.getPackageMeta(packageName)).distTags['latest'].tarball
 
     log('Installing ', packageName)
 
@@ -62,7 +127,7 @@ export class MiniNPM {
     Array.from({ length: 5 }, async () => {
       while (deps.length) {
         const dep = deps.pop()!
-        this.install(dep);
+        this.install2(dep);
       }
     })
   });
@@ -70,17 +135,23 @@ export class MiniNPM {
   /**
    * fetch package versions info
    */
-  getPackageVersions = memoAsync(async (packageName: string) => {
+  getPackageMeta = memoAsync(async (packageName: string) => {
     // https://registry.npmjs.org/react/
     const packageUrl = `${this.options.registryUrl}/${packageName}/`;
     const registryInfo = await fetch(packageUrl).then(x => x.json());
 
-    // { [version]: url }
-    const versionLinks = Object.fromEntries(Object.entries(registryInfo.versions).map(([version, info]) => [version, (info as any).dist.tarball]));
-    const distTags = Object.fromEntries(Object.entries(registryInfo['dist-tags'] || {}).map(([tag, version]) => [tag, versionLinks[version as string]]));
+    const versionList = Object.keys(registryInfo.versions);
+
+    const versions = mapValues(registryInfo.versions, (info: any, version) => ({
+      version,
+      tarball: info.dist.tarball as string,
+      dependencies: info.dependencies || {},
+    }))
+    const distTags = mapValues(registryInfo['dist-tags'] || {}, (version: string) => (versions[version]));
 
     return {
-      versionLinks,
+      versionList,
+      versions,
       distTags,
     }
   })
