@@ -60,6 +60,7 @@ export class BundlerInBrowser {
         fileSystem: fs as any,
         extensions: ['.js', '.mjs', '.cjs', '.json', '.wasm', '.ts', '.tsx', '.jsx', '.vue'],
         conditionNames: ['import', 'require'],
+        symlinks: true,
       })
 
       return ({
@@ -154,8 +155,12 @@ export class BundlerInBrowser {
     if (this.prevVendorBundle?.hash === hash) return this.prevVendorBundle;
 
     // wait for all npm installs to finish
-    await this.npm.install(Array.from(this.npmRequired));
-    throw new Error('stop')
+    await this.npm.install(
+      this.npmRequired.reduce((acc, name) => {
+        acc[name] = 'latest';
+        return acc;
+      }, {} as Record<string, string>)
+    );
 
     // create a new bundle
     const vendor: VendorBundleResult = {

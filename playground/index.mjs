@@ -5,11 +5,11 @@ import installSassPlugin from "../src/plugins/sass";
 import { wrapCommonJS } from "../src/utils";
 
 const fsRaw = (Volume.fromJSON({
-  "/index.js": `
+  "/index2.js": `
 import "cross-spawn";
 import "which"
 `,
-  "/index2.js": `
+  "/index.js": `
 import "github-markdown-css/github-markdown-dark.css";
 import * as S from "./base.module.scss";
 console.log(S);

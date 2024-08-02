@@ -1,7 +1,7 @@
 import path from "path";
-import TarStream, { pack } from 'tar-stream';
+import TarStream from 'tar-stream';
 import type { IFs } from "memfs";
-import { chunked, decodeUTF8, log, mapValues, memoAsync } from "./utils.js";
+import { decodeUTF8, log, makeParallelTaskMgr, memoAsync, toPairs } from "./utils.js";
 import semver from "semver";
 
 export namespace MiniNPM {
@@ -15,12 +15,23 @@ export namespace MiniNPM {
     version: string;
     dependencies: Record<string, string>; // including peerDependencies, only for version checking
   }
+
+  export interface GatheredPackageDep {
+    id: string; // name@version
+    name: string;
+    version: string;
+    dependents: Set<string>; // name@version
+    dependencies: Record<string, string>; // { name -> resolved version }
+    packageJson: any;
+  }
 }
 
 export class MiniNPM {
   public fs: IFs;
   public options: Required<MiniNPM.Options>;
   public index: Record<string, MiniNPM.PkgIndex[]> = {};
+
+  ROOT = 'ROOT';
 
   constructor(fs: IFs, options: MiniNPM.Options = {}) {
     this.fs = fs;
@@ -33,68 +44,134 @@ export class MiniNPM {
     };
   }
 
-  async install(packageNames: string[]) {
-    const getPackageMeta = this.getPackageMeta.bind(this);
-    class PackageWithVersion {
-      id: string;
-      dependents: string[] = [];
-      dependencies: Record<string, string> = {};
-
-      constructor(public name: string, public version: string) {
-        this.id = `${name}@${version}`;
-      }
+  /**
+   * find all dependencies to be installed, in a flat format
+   * 
+   * in the returned object, there is a `[this.ROOT]` key, which is the root package
+   */
+  async gatherPackageDepList(rootDependencies: { [name: string]: string }) {
+    const ROOT = this.ROOT;
+    const requiredPackages: {
+      [nameAtVersion: string]: MiniNPM.GatheredPackageDep
+    } = {
+      [ROOT]: {
+        id: ROOT,
+        name: ROOT,
+        version: '0.0.0',
+        dependents: new Set(),
+        dependencies: {},
+        packageJson: {},
+      },
     }
 
-    const requiredPackages = {} as { [name: string]: { [version: string]: PackageWithVersion } };
+    const parallelTasks = makeParallelTaskMgr()
 
-    // ---- scan dependencies ----
+    const handleDep = async (name: string, versionRange: string, dependentId: string) => {
+      const allVersions = await this.getPackageVersions(name);
+      const version = allVersions.tags[versionRange] || semver.maxSatisfying(allVersions.versions, versionRange)?.toString()
+      if (!version) throw new Error(`No compatible version found for ${name}@${versionRange}`);
 
-    const ROOT = '<root>@0.0.0';
-    const queue = packageNames.map(n => [n, 'latest', [ROOT]] as [name: string, version: string, requiredByTrace: string[]]);
-    while (queue.length) {
-      const [packageName, versionRangeOrTag, trace] = queue.pop()!;
-      log('Scanning ', packageName, '@', versionRangeOrTag, ' from', trace.join(' -> '))
+      requiredPackages[dependentId]!.dependencies[name] = version;
 
-      const dependent = trace[trace.length - 1]!;
-      const packageMeta = await getPackageMeta(packageName);
-      const versionRange = packageMeta.distTags[versionRangeOrTag]?.version || versionRangeOrTag;
-      const compatibleVersion = semver.maxSatisfying(packageMeta.versionList, versionRange);
+      const dep = await getDep(name, version);
+      dep.dependents.add(dependentId);
+    }
 
-      if (!compatibleVersion) {
-        throw new Error(`No compatible version found for ${packageName}@${versionRangeOrTag}`);
-      }
-      
-      // --- write to dependent's info
-
-
-      // --- check if new dep is already installed
-
-      const versions = requiredPackages[packageName] ||= {};
-      const exists = versions[compatibleVersion];
-      if (exists) {
-        // already scanned
-        exists.dependents.push(dependent)
-        continue;
+    const getDep = memoAsync(async (name: string, version: string) => {
+      const packageJson = await this.getPackageJson(name, version);
+      const dep: MiniNPM.GatheredPackageDep = {
+        id: `${name}@${version}`,
+        name,
+        version,
+        dependents: new Set(),
+        dependencies: {},
+        packageJson,
       }
 
-      // add sub-dependencies to queue
-
-      const pkg = new PackageWithVersion(packageName, compatibleVersion);
-      versions[compatibleVersion] = pkg;
-      pkg.dependents.push(dependent);
-
-      const dependencies = packageMeta.versions[compatibleVersion].dependencies;
-      const newPath = [...trace, pkg.id];
-      pkg.dependencies = dependencies;
-      Object.entries(dependencies).forEach(([name, versionRange]) => {
-        queue.push([name, versionRange as string, newPath]);
+      requiredPackages[dep.id] = dep;
+      toPairs(packageJson.dependencies).forEach(([name, versionRange]) => {
+        parallelTasks.push(() => handleDep(name, versionRange as string, dep.id));
       })
-    }
+      return dep;
+    })
 
-    // ---- build ideal tree ----
-    // TODO:
+    toPairs(rootDependencies).forEach(([name, versionRange]) => {
+      parallelTasks.push(() => handleDep(name, versionRange, ROOT));
+    })
 
-    debugger;
+    // now run all parallel tasks -- it will generate during work
+    await parallelTasks.wait();
+
+    return requiredPackages;
+  }
+
+  /**
+   * install lots of npm package
+   * 
+   * using symlink to save disk space. be careful with bundlers resolving
+   */
+  async install(rootDependencies: { [name: string]: string }) {
+    const depFullList = await this.gatherPackageDepList(rootDependencies)
+
+    log('depFullList', depFullList);
+
+    const tasks = makeParallelTaskMgr();
+
+    // build a tree and find out who shall be hoisted (score)
+    const ps: {[name: string]: {[id: string]: number}} = {}
+    Object.values(depFullList).forEach(dep => {
+      if (dep.id === this.ROOT) return;
+
+      const p = ps[dep.name] || (ps[dep.name] = {})
+      if (dep.dependents.has(this.ROOT)) p[dep.id] = Infinity;
+      else p[dep.id] = (p[dep.id]||0)+ dep.dependents.size;
+    })
+
+    const hoisted = new Set<string>();
+    Object.values(ps).forEach((p) => {
+      // find id with highest score
+      let ans='', maxScore=0;
+      for (let [id, score] of Object.entries(p)) {
+        if (score > maxScore) {
+          ans = id;
+          maxScore = score;
+        }
+      }
+      hoisted.add(ans);
+    })
+
+    // install all packages
+    Object.values(depFullList).forEach(dep => {
+      if (dep.id === this.ROOT) return;
+
+      tasks.push(async () => {
+        const directory = `${this.options.nodeModulesDir}/.store/${dep.id}`;
+        await this.pourTarball(dep.packageJson.dist.tarball, directory);
+
+        // then make links to its dependents
+        for (const dependent of dep.dependents) {
+          const dir2 =
+            dependent === this.ROOT
+              ? this.options.nodeModulesDir
+              : `${this.options.nodeModulesDir}/.store/${dependent}/node_modules`;
+
+          const dest = `${dir2}/${dep.name}`;
+          this.fs.mkdirSync(path.dirname(dest), { recursive: true });
+          this.fs.symlinkSync(directory, dest);
+        }
+
+        // special case: hoisted
+        if (hoisted.has(dep.id) && !dep.dependents.has(this.ROOT)) {
+          const dir2 = `${this.options.nodeModulesDir}/${dep.name}`;
+          this.fs.mkdirSync(path.dirname(dir2), { recursive: true });
+          this.fs.symlinkSync(directory, dir2);
+        }
+      });
+    });
+
+    await tasks.wait();
+
+    log('dep installed');
   }
 
   /**
@@ -106,7 +183,8 @@ export class MiniNPM {
     const directory = `${this.options.nodeModulesDir}/${packageName}`;
     if (this.fs.existsSync(directory)) return;
 
-    const tarballUrl = (await this.getPackageMeta(packageName)).distTags['latest'].tarball
+    const version = (await this.getPackageVersions(packageName)).tags['latest']
+    const tarballUrl = await this.getPackageTarballUrl(packageName, version!);
 
     log('Installing ', packageName)
 
@@ -132,27 +210,41 @@ export class MiniNPM {
     })
   });
 
-  /**
-   * fetch package versions info
-   */
-  getPackageMeta = memoAsync(async (packageName: string) => {
+  getPackageTarballUrl = async (packageName: string, version: string) => {
+    const packageJson = await this.getPackageJson(packageName, version);
+    return packageJson.dist.tarball;
+    // return `${this.options.registryUrl}/${packageName}/-/${packageName}-${version}.tgz`;
+  }
+
+  getPackageJson = memoAsync(async (packageName: string, version: string) => {
+    const url = `${this.options.registryUrl}/${packageName}/${version}`;
+    const res = await fetch(url).then(x => x.json());
+
+    return {
+      dependencies: {},
+      ...res,
+    };
+  })
+
+  getPackageVersions = memoAsync(async (packageName: string) => {
+    const url = `https://data.jsdelivr.com/v1/package/npm/${packageName}`
+    const res = await fetch(url).then(x => x.json());
+
+    return {
+      versions: (res.versions || []) as string[],
+      tags: (res.tags || {}) as Record<string, string>,
+    }
+  })
+
+  getPackageVersions2 = memoAsync(async (packageName: string) => {
     // https://registry.npmjs.org/react/
     const packageUrl = `${this.options.registryUrl}/${packageName}/`;
     const registryInfo = await fetch(packageUrl).then(x => x.json());
-
-    const versionList = Object.keys(registryInfo.versions);
-
-    const versions = mapValues(registryInfo.versions, (info: any, version) => ({
-      version,
-      tarball: info.dist.tarball as string,
-      dependencies: info.dependencies || {},
-    }))
-    const distTags = mapValues(registryInfo['dist-tags'] || {}, (version: string) => (versions[version]));
+    const versions = Object.keys(registryInfo.versions);
 
     return {
-      versionList,
       versions,
-      distTags,
+      tags: (registryInfo['dist-tags'] || {}) as Record<string, string>,
     }
   })
 

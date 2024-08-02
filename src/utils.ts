@@ -1,7 +1,35 @@
 import dayjs from "dayjs";
 
+export function toPairs<T>(obj: Record<string, T> | null | undefined) {
+  if (!obj) return [];
+  return Object.entries(obj) as [string, T][];
+}
+
 export function mapValues<T, V>(obj: Record<string, T>, fn: (v: T, k: string) => V) {
-  return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, fn(v, k)]));
+  return Object.fromEntries(toPairs(obj).map(([k, v]) => [k, fn(v, k)]));
+}
+
+export function makeParallelTaskMgr() {
+  const queue: (() => Promise<void>)[] = [];
+
+  const push = (fn: () => Promise<void>) => {
+    queue.push(fn);
+  }
+  const wait = async (concurrency: number = 5) => {
+    await Promise.all(
+      Array.from({ length: concurrency }, async () => {
+        while (queue.length) {
+          const fn = queue.shift()!;
+          await fn();
+        }
+      })
+    )
+  }
+
+  return {
+    push,
+    wait,
+  }
 }
 
 /** 
@@ -29,12 +57,12 @@ export function chunked<T>(arr: T[], size: number) {
   return res;
 }
 
-export function memoAsync<A extends any[], T>(fn: (...args: A) => Promise<T>) {
+export function memoAsync<A extends any[], T>(fn: (...args: A) => Promise<T>, keyGetter?: (...args: A) => string) {
   const cache = new Map<string, Promise<T>>();
-  const toCacheKey = (args: A) => JSON.stringify(args);
+  const toCacheKey = keyGetter || ((...args: A) => JSON.stringify(args));
 
   return async (...args: A) => {
-    let key = toCacheKey(args);
+    let key = toCacheKey(...args);
     let cached = cache.get(key);
     if (cached) return cached;
 
