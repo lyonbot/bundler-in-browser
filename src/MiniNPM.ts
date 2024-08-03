@@ -3,7 +3,7 @@ import TarStream from 'tar-stream';
 import type { IFs } from "memfs";
 import { makeParallelTaskMgr, memoAsync, toPairs } from "./utils.js";
 import semver from "semver";
-import mitt from "mitt";
+import { EventEmitter } from "./EventEmitter.js";
 
 export namespace MiniNPM {
   export interface Options {
@@ -55,7 +55,7 @@ export class MiniNPM {
   public options: Required<MiniNPM.Options>;
   public index: Record<string, MiniNPM.PkgIndex[]> = {};
 
-  public events = mitt<{
+  public events = EventEmitter<{
     'progress': MiniNPM.ProgressEvent;
     'metadata-fetched': {
       requiredPackages: Record<string, MiniNPM.GatheredPackageDep>;
