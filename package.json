@@ -18,6 +18,7 @@
     "esbuild-wasm": "^0.23.0",
     "events": "^3.3.0",
     "memfs": "^4.9.3",
+    "mitt": "^3.0.1",
     "pako": "^2.1.0",
     "path-browserify": "^1.0.1",
     "sass": "^1.77.8",

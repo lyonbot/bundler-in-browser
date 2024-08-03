@@ -3,6 +3,7 @@ import TarStream from 'tar-stream';
 import type { IFs } from "memfs";
 import { decodeUTF8, log, makeParallelTaskMgr, memoAsync, toPairs } from "./utils.js";
 import semver from "semver";
+import mitt from "mitt";
 
 export namespace MiniNPM {
   export interface Options {
@@ -31,12 +32,32 @@ export namespace MiniNPM {
       integrity: string;
     }
   }
+
+  export interface LockFile {
+    packages: {
+      [nameAtVersion: string]: MiniNPM.GatheredPackageDep;
+    }
+    hoisted: string[];
+  }
+
+  export interface ProgressEvent {
+    type: 'progress';
+    stage: 'fetch-metadata' | 'install-package';
+    packageId: string;
+    dependentId?: string;
+    current: number;
+    total: number;
+  }
 }
 
 export class MiniNPM {
   public fs: IFs;
   public options: Required<MiniNPM.Options>;
   public index: Record<string, MiniNPM.PkgIndex[]> = {};
+
+  public events = mitt<{
+    'progress': MiniNPM.ProgressEvent;
+  }>()
 
   ROOT = 'ROOT';
 
@@ -57,11 +78,12 @@ export class MiniNPM {
    * 
    * in the returned object, there is a `[this.ROOT]` key, which is the root package
    */
-  async gatherPackageDepList(rootDependencies: { [name: string]: string }) {
+  async gatherPackagesToInstall(
+    rootDependencies: { [name: string]: string },
+    prevResult?: MiniNPM.LockFile['packages']
+  ) {
     const ROOT = this.ROOT;
-    const requiredPackages: {
-      [nameAtVersion: string]: MiniNPM.GatheredPackageDep
-    } = {
+    const requiredPackages: MiniNPM.LockFile['packages'] = {
       [ROOT]: {
         id: ROOT,
         name: ROOT,
@@ -72,27 +94,100 @@ export class MiniNPM {
       },
     }
 
+    const installedLUT: { [name: string]: { [version: string]: MiniNPM.GatheredPackageDep } } = {};
+    prevResult && Object.values(prevResult).forEach(dep => {
+      if (dep.id === ROOT) return;
+      (installedLUT[dep.name] ||= {})[dep.version] = dep;
+    })
+
     const parallelTasks = makeParallelTaskMgr()
+    let total = 0, current = 0;
+
+    const cachedSemverResult = {} as Record<string, string | null>; // { "foobar@^1.2.3": "1.3.0" }
 
     const handleDep = async (name: string, versionRange: string, dependentId: string) => {
-      const allVersions = await this.getPackageVersions(name);
-      const version = allVersions.tags[versionRange] || semver.maxSatisfying(allVersions.versions, versionRange)?.toString()
+      const event: MiniNPM.ProgressEvent = {
+        type: 'progress',
+        stage: 'fetch-metadata',
+        packageId: `${name}@${versionRange}`,
+        dependentId,
+        current: current,
+        total: ++total,
+      }
+      this.events.emit('progress', event);
+
+      const version = cachedSemverResult[`${name}@${versionRange}`] ||= await (async () => {
+        const installedVersions = installedLUT[name]
+        const exist = (installedVersions && semver.maxSatisfying(Object.keys(installedVersions), versionRange))
+        if (exist) return exist;
+
+        const allVersions = await this.getPackageVersions(name);
+        const ret = allVersions.tags[versionRange] || semver.maxSatisfying(allVersions.versions, versionRange)
+        if (!ret) return null; // not found
+
+        // double check: if prev installed "foo@2.6.0" (required via "foo@^2.0.0"),
+        // but now we met "foo@^2.7.0", then check whether "foo@2.6.0" shall be removed by validating its dependents shall move to "foo@2.7.0"
+        // ( by validating all dependents )
+        // note: `ret >= exist`
+        if (installedVersions) {
+          Object.values(installedVersions).forEach(dep => {
+            if (!requiredPackages[dep.id]) return; // this pre-installed package is not required in current session
+
+            // this package reused, check whether it can be taken away
+
+            let killed = 0;
+            const dependents = toPairs(dep.dependents);
+            dependents.forEach(([dependentId, versionRange]) => {
+              if (!semver.satisfies(ret, versionRange)) return;
+
+              // heck! need move to `ret`
+              delete dep.dependents[dependentId];
+              killed++;
+            })
+
+            if (killed === dependents.length) {
+              // none needs it anymore, remove it
+              getDep.remove(name, dep.version);
+              delete requiredPackages[dep.id]; // side effect of `getDep` 
+            }
+          })
+        }
+
+        return ret;
+      })();
+
       if (!version) throw new Error(`No compatible version found for ${name}@${versionRange}`);
 
       const dep = await getDep(name, version);
       dep.dependents[dependentId] = versionRange;
+
+      this.events.emit('progress', {
+        ...event,
+        current: ++current,
+        total,
+      })
     }
 
     const getDep = memoAsync(async (name: string, version: string) => {
-      const packageJson = await this.getPackageJson(name, version);
-      const dep: MiniNPM.GatheredPackageDep = {
-        id: `${name}@${version}`,
-        name,
-        version,
-        dependents: {},
-        dependencies: packageJson.dependencies || {},
-        peerDependencies: packageJson.peerDependencies,
-        dist: packageJson.dist,
+      let dep: MiniNPM.GatheredPackageDep;
+
+      const prev = prevResult?.[`${name}@${version}`];
+      if (prev) {
+        dep = {
+          ...prev,
+          dependents: {}, // will br rebuilt
+        }
+      } else {
+        const packageJson = await this.getPackageJson(name, version);
+        dep = {
+          id: `${name}@${version}`,
+          name,
+          version,
+          dependents: {},
+          dependencies: packageJson.dependencies || {},
+          peerDependencies: packageJson.peerDependencies,
+          dist: packageJson.dist,
+        }
       }
 
       requiredPackages[dep.id] = dep;
@@ -109,7 +204,10 @@ export class MiniNPM {
     // now run all parallel tasks -- it will generate during work
     await parallelTasks.wait(this.options.concurrency);
 
-    return requiredPackages;
+    return {
+      requiredPackages,
+      reusedInstalledIds: new Set(prevResult ? Object.keys(prevResult).filter(id => requiredPackages[id]) : []),
+    };
   }
 
   async getHoistedPackages(depFullList: Record<string, MiniNPM.GatheredPackageDep>) {
@@ -138,32 +236,96 @@ export class MiniNPM {
     return { hoisted };
   }
 
+  getLockFilePath() {
+    return path.join(this.options.nodeModulesDir, '.store', 'lock.json');
+  }
+
+  async readLockFile() {
+    const lockFilePath = this.getLockFilePath();
+    return new Promise<MiniNPM.LockFile | null>((resolve) => {
+      this.fs.readFile(lockFilePath, 'utf8', (err, data) => {
+        if (err) return resolve(null);
+
+        try {
+          const out = JSON.parse(data as string) as MiniNPM.LockFile;
+          resolve(out);
+        } catch (e) {
+          resolve(null);
+        }
+      });
+    });
+  }
+
+  async writeLockFile(lockFile: MiniNPM.LockFile) {
+    const lockFilePath = this.getLockFilePath();
+    return new Promise<void>((resolve) => {
+      this.fs.writeFile(lockFilePath, JSON.stringify(lockFile, null, 2), () => {
+        // if (err) return reject(err);
+        resolve();
+      });
+    });
+  }
+
   /**
    * install lots of npm package
    * 
    * using symlink to save disk space. be careful with bundlers resolving
    */
   async install(rootDependencies: { [name: string]: string }) {
-    const depFullList = await this.gatherPackageDepList(rootDependencies)
-
-    log('depFullList', depFullList);
-
+    const prevLockFile = await this.readLockFile();
     const tasks = makeParallelTaskMgr();
 
+    const { requiredPackages, reusedInstalledIds } = await this.gatherPackagesToInstall(rootDependencies, prevLockFile?.packages);
+
+    log('requiredPackages', requiredPackages);
+
+    // remove previous installed packages, if not reused
+    if (prevLockFile) {
+      const prevHoisted = new Set(prevLockFile.hoisted);
+      for (const [id, dep] of Object.entries(prevLockFile.packages)) {
+        if (dep.id === this.ROOT) continue;
+
+        // 1. always reset "hoisted"
+        if (prevHoisted.has(id)) this.fs.rmSync(`${this.options.nodeModulesDir}/${dep.name}`, { force: true }) // remove symlink
+
+        // 2. clean up node_modules
+        const storePath = `${this.options.nodeModulesDir}/.store/${id}`;
+        if (reusedInstalledIds.has(id)) {
+          this.fs.rmSync(`${storePath}/node_modules`, { recursive: true, force: true }); // will be rebuilt later
+        } else {
+          this.fs.rmSync(storePath, { recursive: true, force: true }) // package not reused, remove whole directory
+        }
+      }
+    }
+
     // build a tree and find out who shall be hoisted (score)
-    const { hoisted } = await this.getHoistedPackages(depFullList);
+    const { hoisted } = await this.getHoistedPackages(requiredPackages);
 
     // install all packages into `${nodeModulesDir}/.store`
     // meanwhile,
     //   1. create symlinks to its dependents;
     //   2. create symlinks to `${nodeModulesDir}` if is Root's dependent, or can be hoisted
 
-    Object.values(depFullList).forEach(dep => {
+    let current = 0;
+    let event: MiniNPM.ProgressEvent = {
+      type: 'progress',
+      stage: 'install-package',
+      packageId: this.ROOT,
+      current: 0,
+      total: Object.keys(requiredPackages).length - 1, // -1 for root
+    }
+
+    Object.values(requiredPackages).forEach(dep => {
       if (dep.id === this.ROOT) return;
 
       tasks.push(async () => {
         const directory = `${this.options.nodeModulesDir}/.store/${dep.id}`;
-        await this.pourTarball(dep.dist.tarball, directory);
+
+        if (!reusedInstalledIds.has(dep.id)) {
+          // new package, need to download
+          // (note: in previous progress, existing packages' node_modules was cleaned up)
+          await this.pourTarball(dep.dist.tarball, directory);
+        }
 
         // then make links to its dependents
         for (const dependent of Object.keys(dep.dependents)) {
@@ -180,12 +342,24 @@ export class MiniNPM {
           this.fs.mkdirSync(path.dirname(dest), { recursive: true });
           this.fs.symlinkSync(directory, dest);
         }
+
+        this.events.emit('progress', {
+          ...event,
+          packageId: dep.id,
+          current: ++current,
+          // total is not changed
+        })
       });
     });
 
     await tasks.wait(this.options.concurrency);
 
     log('dep installed');
+
+    await this.writeLockFile({
+      hoisted: Array.from(hoisted),
+      packages: requiredPackages,
+    })
   }
 
   getPackageTarballUrl = async (packageName: string, version: string) => {

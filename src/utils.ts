@@ -76,7 +76,7 @@ export function memoAsync<A extends any[], T>(fn: (...args: A) => Promise<T>, ke
     }
   }
 
-  return async (...args: A) => {
+  const memoFn = async (...args: A) => {
     let key = toCacheKey(...args);
     let cached = cache.get(key);
     if (cached) {
@@ -90,6 +90,12 @@ export function memoAsync<A extends any[], T>(fn: (...args: A) => Promise<T>, ke
 
     return cached[0];
   }
+  memoFn.remove = (...args: A) => {
+    let key = toCacheKey(...args);
+    cache.delete(key);
+  }
+
+  return memoFn;
 }
 
 export function log(...args: any[]) {

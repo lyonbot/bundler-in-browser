@@ -56,6 +56,10 @@ export class BundlerInBrowser {
       useJSDelivrToQueryVersions: false,
     });
 
+    this.npm.events.on('progress', event => {
+      console.log('[npm]', event.stage, (event.dependentId || '') + ' > ', event.packageId, event.current + '/' + event.total);
+    });
+
     const resolvePlugin = (): esbuild.Plugin => {
       const fs = this.fs;
       const resolve = createResolver({
