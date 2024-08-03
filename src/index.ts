@@ -52,7 +52,9 @@ export class BundlerInBrowser {
 
   constructor(fs: IFs) {
     this.fs = fs;
-    this.npm = new MiniNPM(fs);
+    this.npm = new MiniNPM(fs, {
+      useJSDelivrToQueryVersions: false,
+    });
 
     const resolvePlugin = (): esbuild.Plugin => {
       const fs = this.fs;

@@ -8,7 +8,8 @@ export namespace MiniNPM {
   export interface Options {
     registryUrl?: string;
     nodeModulesDir?: string;
-    cacheDir?: string;
+    useJSDelivrToQueryVersions?: boolean;
+    concurrency?: number;
   }
 
   export interface PkgIndex {
@@ -20,9 +21,15 @@ export namespace MiniNPM {
     id: string; // name@version
     name: string;
     version: string;
-    dependents: Set<string>; // name@version
-    dependencies: Record<string, string>; // { name -> resolved version }
-    packageJson: any;
+    dependents: Record<string, string>; // { "name@version": "versionRange" }
+    dependencies: Record<string, string>; // { "name": "versionRange" }
+    peerDependencies?: Record<string, string>; // { "name": "versionRange" } 
+
+    dist: {
+      shasum: string;
+      tarball: string;
+      integrity: string;
+    }
   }
 }
 
@@ -39,7 +46,8 @@ export class MiniNPM {
       registryUrl: 'https://registry.npmjs.org',
       // registryUrl: 'https://mirrors.cloud.tencent.com/npm',
       nodeModulesDir: '/node_modules',
-      cacheDir: '/tmp/npm-store',
+      useJSDelivrToQueryVersions: true,
+      concurrency: 5,
       ...options,
     };
   }
@@ -58,9 +66,9 @@ export class MiniNPM {
         id: ROOT,
         name: ROOT,
         version: '0.0.0',
-        dependents: new Set(),
-        dependencies: {},
-        packageJson: {},
+        dependents: {},
+        dependencies: { ...rootDependencies },
+        dist: {} as any,
       },
     }
 
@@ -71,10 +79,8 @@ export class MiniNPM {
       const version = allVersions.tags[versionRange] || semver.maxSatisfying(allVersions.versions, versionRange)?.toString()
       if (!version) throw new Error(`No compatible version found for ${name}@${versionRange}`);
 
-      requiredPackages[dependentId]!.dependencies[name] = version;
-
       const dep = await getDep(name, version);
-      dep.dependents.add(dependentId);
+      dep.dependents[dependentId] = versionRange;
     }
 
     const getDep = memoAsync(async (name: string, version: string) => {
@@ -83,13 +89,14 @@ export class MiniNPM {
         id: `${name}@${version}`,
         name,
         version,
-        dependents: new Set(),
-        dependencies: {},
-        packageJson,
+        dependents: {},
+        dependencies: packageJson.dependencies || {},
+        peerDependencies: packageJson.peerDependencies,
+        dist: packageJson.dist,
       }
 
       requiredPackages[dep.id] = dep;
-      toPairs(packageJson.dependencies).forEach(([name, versionRange]) => {
+      toPairs(dep.dependencies).forEach(([name, versionRange]) => {
         parallelTasks.push(() => handleDep(name, versionRange as string, dep.id));
       })
       return dep;
@@ -100,9 +107,35 @@ export class MiniNPM {
     })
 
     // now run all parallel tasks -- it will generate during work
-    await parallelTasks.wait();
+    await parallelTasks.wait(this.options.concurrency);
 
     return requiredPackages;
+  }
+
+  async getHoistedPackages(depFullList: Record<string, MiniNPM.GatheredPackageDep>) {
+    const ps: { [name: string]: { [id: string]: number } } = {}
+    Object.values(depFullList).forEach(dep => {
+      if (dep.id === this.ROOT) return;
+
+      const p = ps[dep.name] || (ps[dep.name] = {})
+      if (this.ROOT in dep.dependents) p[dep.id] = Infinity;
+      else p[dep.id] = (p[dep.id] || 0) + Object.keys(dep.dependents).length;
+    })
+
+    const hoisted = new Set<string>();
+    Object.values(ps).forEach((p) => {
+      // find id with highest score
+      let ans = '', maxScore = 0;
+      for (let [id, score] of Object.entries(p)) {
+        if (score > maxScore) {
+          ans = id;
+          maxScore = score;
+        }
+      }
+      hoisted.add(ans);
+    })
+
+    return { hoisted };
   }
 
   /**
@@ -118,97 +151,42 @@ export class MiniNPM {
     const tasks = makeParallelTaskMgr();
 
     // build a tree and find out who shall be hoisted (score)
-    const ps: {[name: string]: {[id: string]: number}} = {}
-    Object.values(depFullList).forEach(dep => {
-      if (dep.id === this.ROOT) return;
+    const { hoisted } = await this.getHoistedPackages(depFullList);
 
-      const p = ps[dep.name] || (ps[dep.name] = {})
-      if (dep.dependents.has(this.ROOT)) p[dep.id] = Infinity;
-      else p[dep.id] = (p[dep.id]||0)+ dep.dependents.size;
-    })
+    // install all packages into `${nodeModulesDir}/.store`
+    // meanwhile,
+    //   1. create symlinks to its dependents;
+    //   2. create symlinks to `${nodeModulesDir}` if is Root's dependent, or can be hoisted
 
-    const hoisted = new Set<string>();
-    Object.values(ps).forEach((p) => {
-      // find id with highest score
-      let ans='', maxScore=0;
-      for (let [id, score] of Object.entries(p)) {
-        if (score > maxScore) {
-          ans = id;
-          maxScore = score;
-        }
-      }
-      hoisted.add(ans);
-    })
-
-    // install all packages
     Object.values(depFullList).forEach(dep => {
       if (dep.id === this.ROOT) return;
 
       tasks.push(async () => {
         const directory = `${this.options.nodeModulesDir}/.store/${dep.id}`;
-        await this.pourTarball(dep.packageJson.dist.tarball, directory);
+        await this.pourTarball(dep.dist.tarball, directory);
 
         // then make links to its dependents
-        for (const dependent of dep.dependents) {
-          const dir2 =
-            dependent === this.ROOT
-              ? this.options.nodeModulesDir
-              : `${this.options.nodeModulesDir}/.store/${dependent}/node_modules`;
+        for (const dependent of Object.keys(dep.dependents)) {
+          if (dependent === this.ROOT) continue; // root's dependents is always hoisted later.
 
-          const dest = `${dir2}/${dep.name}`;
+          const dest = `${this.options.nodeModulesDir}/.store/${dependent}/node_modules/${dep.name}`;
           this.fs.mkdirSync(path.dirname(dest), { recursive: true });
           this.fs.symlinkSync(directory, dest);
         }
 
-        // special case: hoisted
-        if (hoisted.has(dep.id) && !dep.dependents.has(this.ROOT)) {
-          const dir2 = `${this.options.nodeModulesDir}/${dep.name}`;
-          this.fs.mkdirSync(path.dirname(dir2), { recursive: true });
-          this.fs.symlinkSync(directory, dir2);
+        // hoist to `${nodeModulesDir}` if is root's dependent, or can be hoisted
+        if (hoisted.has(dep.id)) {
+          const dest = `${this.options.nodeModulesDir}/${dep.name}`;
+          this.fs.mkdirSync(path.dirname(dest), { recursive: true });
+          this.fs.symlinkSync(directory, dest);
         }
       });
     });
 
-    await tasks.wait();
+    await tasks.wait(this.options.concurrency);
 
     log('dep installed');
   }
-
-  /**
-   * install a npm package
-   * 
-   * if already installing, return previous promise
-   */
-  install2 = memoAsync(async (packageName: string) => {
-    const directory = `${this.options.nodeModulesDir}/${packageName}`;
-    if (this.fs.existsSync(directory)) return;
-
-    const version = (await this.getPackageVersions(packageName)).tags['latest']
-    const tarballUrl = await this.getPackageTarballUrl(packageName, version!);
-
-    log('Installing ', packageName)
-
-    const { packageJson } = await this.pourTarball(tarballUrl, directory);
-    const index = this.index[packageName] ||= [];
-    index.push({
-      version: packageJson.version,
-      dependencies: {
-        ...packageJson.dependencies,
-        ...packageJson.peerDependencies,
-      },
-    })
-
-    log('Installed ', packageName, '@', packageJson.version)
-
-    // auto download dependencies, in parallel
-    const deps = Object.keys(packageJson.dependencies || {})
-    Array.from({ length: 5 }, async () => {
-      while (deps.length) {
-        const dep = deps.pop()!
-        this.install2(dep);
-      }
-    })
-  });
 
   getPackageTarballUrl = async (packageName: string, version: string) => {
     const packageJson = await this.getPackageJson(packageName, version);
@@ -226,7 +204,19 @@ export class MiniNPM {
     };
   })
 
-  getPackageVersions = memoAsync(async (packageName: string) => {
+  getPackageVersions(packageName: string): Promise<{
+    versions: string[];
+    tags: Record<string, string>;
+  }> {
+    const handler =
+      this.options.useJSDelivrToQueryVersions
+        ? this.getPackageVersionsWithJSDelivr
+        : this.getPackageVersionsWithRegistry
+
+    return handler(packageName);
+  }
+
+  getPackageVersionsWithJSDelivr = memoAsync(async (packageName: string) => {
     const url = `https://data.jsdelivr.com/v1/package/npm/${packageName}`
     const res = await fetch(url).then(x => x.json());
 
@@ -236,7 +226,7 @@ export class MiniNPM {
     }
   })
 
-  getPackageVersions2 = memoAsync(async (packageName: string) => {
+  getPackageVersionsWithRegistry = memoAsync(async (packageName: string) => {
     // https://registry.npmjs.org/react/
     const packageUrl = `${this.options.registryUrl}/${packageName}/`;
     const registryInfo = await fetch(packageUrl).then(x => x.json());
@@ -293,9 +283,7 @@ export class MiniNPM {
       fs.writeFileSync(fileName, data);
       if (header.name === 'package/package.json') packageJson = JSON.parse(decodeUTF8(data));
 
-      stream.on('end', () => {
-        next();
-      });
+      stream.on('end', () => Promise.resolve().then(next))
       stream.resume();
     });
 
