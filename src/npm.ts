@@ -57,6 +57,10 @@ export class MiniNPM {
 
   public events = mitt<{
     'progress': MiniNPM.ProgressEvent;
+    'metadata-fetched': {
+      requiredPackages: Record<string, MiniNPM.GatheredPackageDep>;
+      reusedInstalledIds: Set<string>;
+    }
   }>()
 
   ROOT = 'ROOT';
@@ -276,8 +280,7 @@ export class MiniNPM {
     const tasks = makeParallelTaskMgr();
 
     const { requiredPackages, reusedInstalledIds } = await this.gatherPackagesToInstall(rootDependencies, prevLockFile?.packages);
-
-    log('requiredPackages', requiredPackages);
+    this.events.emit('metadata-fetched', { requiredPackages, reusedInstalledIds })
 
     // remove previous installed packages, if not reused
     if (prevLockFile) {
@@ -286,7 +289,7 @@ export class MiniNPM {
         if (dep.id === this.ROOT) continue;
 
         // 1. always reset "hoisted"
-        if (prevHoisted.has(id)) this.fs.rmSync(`${this.options.nodeModulesDir}/${dep.name}`, { force: true }) // remove symlink
+        if (prevHoisted.has(id)) this.fs.unlinkSync(`${this.options.nodeModulesDir}/${dep.name}`) // remove symlink
 
         // 2. clean up node_modules
         const storePath = `${this.options.nodeModulesDir}/.store/${id}`;
@@ -354,8 +357,6 @@ export class MiniNPM {
 
     await tasks.wait(this.options.concurrency);
 
-    log('dep installed');
-
     await this.writeLockFile({
       hoisted: Array.from(hoisted),
       packages: requiredPackages,
@@ -420,7 +421,6 @@ export class MiniNPM {
 
     if (!destDir.endsWith('/')) destDir += '/';
     let inflated: Uint8Array;
-    let packageJson: any;
 
     if (typeof DecompressionStream !== 'undefined') {
       const ds = new DecompressionStream("gzip");
@@ -455,7 +455,7 @@ export class MiniNPM {
 
       const data = inflated.slice(dataOffset, dataOffset + header.size!);
       fs.writeFileSync(fileName, data);
-      if (header.name === 'package/package.json') packageJson = JSON.parse(decodeUTF8(data));
+      // if (header.name === 'package/package.json') packageJson = JSON.parse(decodeUTF8(data));
 
       stream.on('end', () => Promise.resolve().then(next))
       stream.resume();
@@ -466,9 +466,5 @@ export class MiniNPM {
       tar.on('error', reject);
       tar.end(inflated);
     });
-
-    return {
-      packageJson,
-    }
   }
 }

@@ -6,7 +6,7 @@ const require = createRequire(import.meta.url);
 export default defineConfig({
   define: {
     'process.env.NODE_ENV': '"development"',
-    'process.platform': '"browser"',
+    // 'process.platform': '"browser"',
   },
   resolve: {
     alias: {
