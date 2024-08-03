@@ -2,9 +2,11 @@ import './dirty-stuff/monkey-patch.js';
 
 import esbuild from "esbuild-wasm";
 import { create as createResolver } from 'enhanced-resolve'
-import { type IFs } from "memfs";
 import { MiniNPM } from "./MiniNPM.js";
-import { log, wrapCommonJS, pathToNpmPackage, makeParallelTaskMgr } from './utils.js';
+import { wrapCommonJS, pathToNpmPackage, makeParallelTaskMgr } from './utils.js';
+import { log } from './log.js';
+
+import type { IFs } from "memfs";
 
 const setToSortedArray = (set: Set<string>) => Array.from(set).sort()
 
@@ -15,6 +17,11 @@ export namespace BundlerInBrowser {
     externalDeps: string[];
     js: string;  // export `dep${index}`
     css: string;
+  }
+
+  export interface CompileUserCodeOptions {
+    /** defaults to `/index.js` */
+    entrypoint?: string
   }
 }
 
@@ -50,7 +57,7 @@ export class BundlerInBrowser {
     });
 
     this.npm.events.on('progress', event => {
-      console.log('[npm]', event.stage, (event.dependentId || '') + ' > ', event.packageId, event.current + '/' + event.total);
+      log('[npm]', event.stage, (event.dependentId || '') + ' > ', event.packageId, event.current + '/' + event.total);
     });
 
     const resolvePlugin = (): esbuild.Plugin => {
@@ -124,7 +131,7 @@ export class BundlerInBrowser {
   /**
    * stage1: compile user code, collect npm dependencies, yields CommonJS module
    */
-  async bundleUserCode() {
+  async bundleUserCode(opts?: BundlerInBrowser.CompileUserCodeOptions) {
     await this.assertInitialized();
 
     const npmRequired = new Set<string>();
@@ -151,7 +158,7 @@ export class BundlerInBrowser {
     }
 
     const output = await esbuild.build({
-      entryPoints: ["/index.js"],
+      entryPoints: [opts?.entrypoint || "/index.js"],
       bundle: true,
       write: false,
       outdir: "/user",
@@ -183,6 +190,9 @@ export class BundlerInBrowser {
 
   /**
    * stage2: bundle vendor, including npm install
+   * 
+   * if `/package.json` exists, it will be used to specify dependencies version.
+   * new dependencies will be added to package.json, and will be installed too.
    */
   async bundleVendor(opts: {
     hash: string;
@@ -222,7 +232,7 @@ export class BundlerInBrowser {
         rootPackageJson.dependencies[name] = `^${version}`;
       })
     }
-    await addingMissingDepTasks.wait()
+    await addingMissingDepTasks.run()
 
     // write package.json
     await this.fs.promises.writeFile('/package.json', JSON.stringify(rootPackageJson, null, 2));
@@ -309,13 +319,13 @@ export class BundlerInBrowser {
   /** cached result of `bundleVendor()`, only for `compile()` */
   lastVendorBundle: undefined | BundlerInBrowser.VendorBundleResult
 
-  async compile() {
+  async compile(opts?: BundlerInBrowser.CompileUserCodeOptions) {
     await this.assertInitialized();
     log('Start compiling')
 
     // stage 1: compile user code, collect npm dependencies, yields CommonJS module
 
-    const userCode = await this.bundleUserCode();
+    const userCode = await this.bundleUserCode(opts);
     log('user code compile done', userCode);
 
     // phase 2: bundle vendor, including npm install

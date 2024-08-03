@@ -5,11 +5,18 @@ import installSassPlugin from "../src/plugins/sass";
 import { wrapCommonJS } from "../src/utils";
 
 const fsRaw = (Volume.fromJSON({
-  "/index2.js": `
-import "cross-spawn";
-import "which"
-`,
   "/index.js": `
+import confetti from "canvas-confetti";
+
+confetti();
+setInterval(() => { confetti() }, 3000);
+
+const elt = document.createElement('h1');
+elt.textContent = 'BundlerInBrowser! Works!';
+elt.style.cssText = 'text-align: center; font-size: 32px; margin-top: 30vh;';
+document.body.appendChild(elt);
+`,
+  "/index2.js": `
 import "github-markdown-css/github-markdown-dark.css";
 import * as S from "./base.module.scss";
 console.log(S);

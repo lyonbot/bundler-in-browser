@@ -1,23 +1,13 @@
-import dayjs from "dayjs";
-
-export function promisify<T, ARGS extends any[]>(fn: (...args: [...ARGS, (err: any, result: T) => any]) => void) {
-  return (...args: ARGS) => new Promise<T>((resolve, reject) => {
-    fn(...args, (err: any, result: T) => {
-      if (err) return reject(err);
-      resolve(result);
-    })
-  })
-}
-
 export function toPairs<T>(obj: Record<string, T> | null | undefined) {
   if (!obj) return [];
   return Object.entries(obj) as [string, T][];
 }
 
-export function mapValues<T, V>(obj: Record<string, T>, fn: (v: T, k: string) => V) {
-  return Object.fromEntries(toPairs(obj).map(([k, v]) => [k, fn(v, k)]));
-}
-
+/**
+ * given full path like `@lyonbot/bundler-in-browser/foo/bar.js`, 
+ * 
+ * return `['@lyonbot/bundler-in-browser', 'foo/bar.js']`
+ */
 export function pathToNpmPackage(fullPath: string): [packageName: string, importedPath: string] {
   let fullPathSplitted = fullPath.split('/', 2);
   let packageName = fullPath[0] === '@' ? fullPathSplitted.join('/') : fullPathSplitted[0];
@@ -26,13 +16,18 @@ export function pathToNpmPackage(fullPath: string): [packageName: string, import
   return [packageName, importedPath];
 }
 
+/**
+ * make a parallel task manager
+ * 
+ * it run tasks in limited concurrency. during running, you can push more tasks to the queue.
+ */
 export function makeParallelTaskMgr() {
   const queue: (() => Promise<void>)[] = [];
 
   const push = (fn: () => Promise<void>) => {
     queue.push(fn);
   }
-  const wait = async (concurrency: number = 5) => {
+  const run = async (concurrency: number = 5) => {
     await Promise.all(
       Array.from({ length: concurrency }, async () => {
         while (queue.length) {
@@ -45,12 +40,12 @@ export function makeParallelTaskMgr() {
 
   return {
     push,
-    wait,
+    run,
   }
 }
 
 /** 
- * given a cjs module source, wrap it into a CallExpression, which returns `module.exports` 
+ * given a cjs module source, wrap it into a IIFE (like `(()=>{...}())` wrapped in bracket), whose value is `module.exports`
  * 
  * beware `require` is not defined inside.
  */
@@ -58,22 +53,11 @@ export function wrapCommonJS(code: string) {
   return `((modules => ((exports=>{${code}\n})(modules.exports), modules.exports))({exports:{}}))`
 }
 
-export function decodeUTF8(buf: Uint8Array) {
-  return new TextDecoder().decode(buf);
-}
-
-export function encodeUTF8(str: string) {
-  return new TextEncoder().encode(str);
-}
-
-export function chunked<T>(arr: T[], size: number) {
-  let res: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    res.push(arr.slice(i, i + size));
-  }
-  return res;
-}
-
+/**
+ * memoize a function, which will be called with the same arguments, will return the same result.
+ * 
+ * results may be cleared after a certain time.
+ */
 export function memoAsync<A extends any[], T>(fn: (...args: A) => Promise<T>, keyGetter?: (...args: A) => string) {
   const cache = new Map<string, [Promise<T>, clearAfter: number]>();
   const toCacheKey = keyGetter || ((...args: A) => JSON.stringify(args));
@@ -113,8 +97,4 @@ export function memoAsync<A extends any[], T>(fn: (...args: A) => Promise<T>, ke
   }
 
   return memoFn;
-}
-
-export function log(...args: any[]) {
-  console.log(dayjs().format(), ...args);
 }

@@ -1,5 +1,7 @@
 import { createRequire } from 'module';
 import { defineConfig } from 'vite'
+import dts from 'vite-plugin-dts'
+
 import packageJSON from './package.json' assert { type: 'json' };
 const require = createRequire(import.meta.url);
 
@@ -16,9 +18,13 @@ export default defineConfig({
       'graceful-fs': require.resolve('./src/dirty-stuff/empty-object.cjs'),
     }
   },
+  plugins: [dts({ rollupTypes: true })],
   build: {
     rollupOptions: {
-      external: Object.keys(packageJSON.dependencies)
+      external: [
+        ...Object.keys(packageJSON.dependencies),
+        ...Object.keys(packageJSON.peerDependencies),
+      ]
     },
     lib: {
       entry: './src/index.ts',

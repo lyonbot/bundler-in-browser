@@ -2,7 +2,9 @@
 .vscode/
 node_modules/
 dist/
+/esm
 *.log
 *.tar.gz
 *.tgz
+tsconfig.tsbuildinfo
 # package-lock.json

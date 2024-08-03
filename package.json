@@ -1,30 +1,68 @@
 {
   "name": "bundler-in-browser",
-  "version": "1.0.0",
-  "description": "",
+  "version": "0.1.0",
+  "description": "a bundler in browser, auto install npm packages, powered by esbuild-wasm",
+  "homepage": "https://lyonbot.github.io/bundler-in-browser/",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lyonbot/bundler-in-browser.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lyonbot/bundler-in-browser/issues"
+  },
   "type": "module",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "default": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./*": {
+      "default": "./dist/*"
+    }
+  },
   "scripts": {
     "start": "vite --open ./playground/index.html",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest",
+    "build": "vite build",
+    "prepack": "npm run build"
   },
+  "files": [
+    "dist"
+  ],
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "lyonbot <lyonbot@gmail.com>",
+  "license": "MIT",
+  "peerDependenciesMeta": {
+    "sass": {
+      "optional": true
+    },
+    "memfs": {
+      "optional": true
+    }
+  },
+  "peerDependencies": {
+    "memfs": "^4.9.3",
+    "sass": "^1.77.8"
+  },
   "dependencies": {
     "buffer": "^6.0.3",
-    "dayjs": "^1.11.12",
-    "enhanced-resolve": "^5.17.0",
-    "esbuild-wasm": "^0.23.0",
+    "dayjs": "^1.0.0",
+    "enhanced-resolve": "^5.10.0",
+    "esbuild-wasm": "*",
     "events": "^3.3.0",
-    "memfs": "^4.9.3",
-    "mitt": "^3.0.1",
     "pako": "^2.1.0",
     "path-browserify": "^1.0.1",
-    "sass": "^1.77.8",
-    "semver": "^7.6.3",
+    "semver": "^7.0.0",
     "streamx": "^2.18.0",
     "tar-stream": "^3.1.7",
+    "tiny-typed-emitter": "^2.1.0",
     "util": "^0.12.5"
   },
   "devDependencies": {
@@ -32,9 +70,12 @@
     "@types/path-browserify": "^1.0.2",
     "@types/semver": "^7.5.8",
     "@types/tar-stream": "^3.1.3",
+    "memfs": "^4.9.3",
     "path": "npm:path-browserify@^1.0.1",
+    "sass": "^1.77.8",
     "typescript": "^5.5.4",
     "vite": "^5.3.4",
+    "vite-plugin-dts": "4.0.0-beta.2",
     "vitest": "^2.0.5"
   }
 }

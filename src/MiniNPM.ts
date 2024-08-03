@@ -55,12 +55,12 @@ export class MiniNPM {
   public options: Required<MiniNPM.Options>;
   public index: Record<string, MiniNPM.PkgIndex[]> = {};
 
-  public events = EventEmitter<{
-    'progress': MiniNPM.ProgressEvent;
-    'metadata-fetched': {
+  public events = new EventEmitter<{
+    'progress': (e: MiniNPM.ProgressEvent) => void;
+    'metadata-fetched': (e: {
       requiredPackages: Record<string, MiniNPM.GatheredPackageDep>;
       reusedInstalledIds: Set<string>;
-    }
+    }) => void
   }>()
 
   ROOT = 'ROOT';
@@ -71,7 +71,7 @@ export class MiniNPM {
       registryUrl: 'https://registry.npmjs.org',
       // registryUrl: 'https://mirrors.cloud.tencent.com/npm',
       nodeModulesDir: '/node_modules',
-      useJSDelivrToQueryVersions: true,
+      useJSDelivrToQueryVersions: false,
       concurrency: 5,
       ...options,
     };
@@ -206,7 +206,7 @@ export class MiniNPM {
     })
 
     // now run all parallel tasks -- it will generate during work
-    await parallelTasks.wait(this.options.concurrency);
+    await parallelTasks.run(this.options.concurrency);
 
     return {
       requiredPackages,
@@ -355,7 +355,7 @@ export class MiniNPM {
       });
     });
 
-    await tasks.wait(this.options.concurrency);
+    await tasks.run(this.options.concurrency);
 
     await this.writeLockFile({
       hoisted: Array.from(hoisted),
