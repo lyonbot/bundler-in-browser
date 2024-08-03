@@ -1,5 +1,5 @@
 import * as sass from 'sass';
-import type { BundlerInBrowser } from "../index.js";
+import type { BundlerInBrowser } from "../BundlerInBrowser.js";
 import type esbuild from "esbuild-wasm";
 
 export default function installSassPlugin(bundler: BundlerInBrowser) {

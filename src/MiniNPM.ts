@@ -1,7 +1,7 @@
 import path from "path";
 import TarStream from 'tar-stream';
 import type { IFs } from "memfs";
-import { decodeUTF8, log, makeParallelTaskMgr, memoAsync, toPairs } from "./utils.js";
+import { makeParallelTaskMgr, memoAsync, toPairs } from "./utils.js";
 import semver from "semver";
 import mitt from "mitt";
 
@@ -369,7 +369,25 @@ export class MiniNPM {
     // return `${this.options.registryUrl}/${packageName}/-/${packageName}-${version}.tgz`;
   }
 
-  getPackageJson = memoAsync(async (packageName: string, version: string) => {
+  getPackageJson(packageName: string, version: string): Promise<any> {
+    const handler =
+      this.options.useJSDelivrToQueryVersions
+        ? this.getPackageJsonDirectly
+        : this.getPackageJsonViaVersions
+
+    return handler(packageName, version);
+  }
+
+  getPackageJsonViaVersions = memoAsync(async (packageName: string, version: string) => {
+    // this URL has disk cache, might be faster
+    const packageUrl = `${this.options.registryUrl}/${packageName}/`;
+    const registryInfo = await fetch(packageUrl).then(x => x.json());
+
+    return registryInfo.versions[version];
+  })
+
+  getPackageJsonDirectly = memoAsync(async (packageName: string, version: string) => {
+    // a bit slower (this URL is api without cache)
     const url = `${this.options.registryUrl}/${packageName}/${version}`;
     const res = await fetch(url).then(x => x.json());
 

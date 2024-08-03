@@ -1,5 +1,14 @@
 import dayjs from "dayjs";
 
+export function promisify<T, ARGS extends any[]>(fn: (...args: [...ARGS, (err: any, result: T) => any]) => void) {
+  return (...args: ARGS) => new Promise<T>((resolve, reject) => {
+    fn(...args, (err: any, result: T) => {
+      if (err) return reject(err);
+      resolve(result);
+    })
+  })
+}
+
 export function toPairs<T>(obj: Record<string, T> | null | undefined) {
   if (!obj) return [];
   return Object.entries(obj) as [string, T][];
@@ -7,6 +16,14 @@ export function toPairs<T>(obj: Record<string, T> | null | undefined) {
 
 export function mapValues<T, V>(obj: Record<string, T>, fn: (v: T, k: string) => V) {
   return Object.fromEntries(toPairs(obj).map(([k, v]) => [k, fn(v, k)]));
+}
+
+export function pathToNpmPackage(fullPath: string): [packageName: string, importedPath: string] {
+  let fullPathSplitted = fullPath.split('/', 2);
+  let packageName = fullPath[0] === '@' ? fullPathSplitted.join('/') : fullPathSplitted[0];
+  let importedPath = fullPath.slice(packageName.length + 1) // remove leading slash
+
+  return [packageName, importedPath];
 }
 
 export function makeParallelTaskMgr() {
