@@ -50,6 +50,13 @@ export namespace MiniNPM {
   }
 }
 
+/**
+ * a minimal npm client, which only supports installing packages.
+ * 
+ * it manages a customized `lock.json` file, hence you can quickly re-install, adding or removing packages.
+ * 
+ * it heavily relies on `symlinks`. don't forget to enable `symlinks` in your resolve plugin.
+ */
 export class MiniNPM {
   public fs: IFs;
   public options: Required<MiniNPM.Options>;

@@ -2,19 +2,41 @@ import { Volume } from "memfs";
 import { BundlerInBrowser } from "../src/index";
 import esbuildWasmURL from "esbuild-wasm/esbuild.wasm?url";
 import installSassPlugin from "../src/plugins/sass";
+import installVuePlugin from "../src/plugins/vue";
 import { wrapCommonJS } from "../src/utils";
 
 const fsRaw = (Volume.fromJSON({
   "/index.js": `
 import confetti from "canvas-confetti";
-
 confetti();
 setInterval(() => { confetti() }, 3000);
 
-const elt = document.createElement('h1');
-elt.textContent = 'BundlerInBrowser! Works!';
-elt.style.cssText = 'text-align: center; font-size: 32px; margin-top: 30vh;';
-document.body.appendChild(elt);
+import { createApp } from 'vue';
+import App from './App.vue';
+
+const el = document.createElement('div');
+document.body.appendChild(el);
+createApp(App).mount(el);
+`,
+  "/App.vue": `
+<template>
+  <h1>BundlerInBrowser! Works!</h1>
+  <p>Counter: {{ count }}</p>
+  <button @click="increment">Increment</button>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue';
+const count = ref(0);
+const increment = () => count.value++;
+const hue = computed(() => (count.value * 40) % 360);
+</script>
+
+<style scoped>
+h1 {
+  color: hsla(v-bind(hue), 100%, 37%, 1);
+}
+</style>
 `,
   "/index2.js": `
 import "github-markdown-css/github-markdown-dark.css";
@@ -100,6 +122,7 @@ await compiler.initialize({
 });
 
 installSassPlugin(compiler);
+installVuePlugin(compiler);
 
 const out = await compiler.compile();
 console.log('compiled', out);

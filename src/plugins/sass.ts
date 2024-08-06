@@ -3,13 +3,13 @@ import type { BundlerInBrowser } from "../BundlerInBrowser.js";
 import type esbuild from "esbuild-wasm";
 
 export default function installSassPlugin(bundler: BundlerInBrowser) {
-  const fs = bundler.fs;
   const plugin: esbuild.Plugin = {
     name: "sass-loader",
     setup(build) {
       build.onLoad({ filter: /.scss$/ }, async (args) => {
+        const fs = bundler.fs;
         let fullPath = args.path;
-        let contents = fs.readFileSync(fullPath).toString('utf8');
+        let contents = await fs.promises.readFile(fullPath, 'utf8') as string;
         let result = await sass.compileStringAsync(contents, {
           style: 'expanded'
         });

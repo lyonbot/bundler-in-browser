@@ -45,11 +45,15 @@
     },
     "memfs": {
       "optional": true
+    },
+    "vue": {
+      "optional": true
     }
   },
   "peerDependencies": {
     "memfs": "^4.9.3",
-    "sass": "^1.77.8"
+    "sass": "^1.77.8",
+    "vue": "^3.2.14"
   },
   "dependencies": {
     "buffer": "^6.0.3",
@@ -63,7 +67,8 @@
     "streamx": "^2.18.0",
     "tar-stream": "^3.1.7",
     "tiny-typed-emitter": "^2.1.0",
-    "util": "^0.12.5"
+    "util": "^0.12.5",
+    "yon-utils": "^0.1.23"
   },
   "devDependencies": {
     "@types/pako": "^2.0.3",
@@ -76,6 +81,7 @@
     "typescript": "^5.5.4",
     "vite": "^5.3.4",
     "vite-plugin-dts": "4.0.0-beta.2",
-    "vitest": "^2.0.5"
+    "vitest": "^2.0.5",
+    "vue": "^3.2.14"
   }
 }

@@ -10,3 +10,8 @@ export { wrapCommonJS, makeParallelTaskMgr, pathToNpmPackage } from './utils.js'
 export async function installSassPlugin(bundler: BundlerInBrowser) {
   (await import('./plugins/sass.js')).default(bundler);
 }
+
+/** add vue support. requires `vue@^3.2.14` installed */
+export async function installVuePlugin(...args: Parameters<typeof import('./plugins/vue.js').default>) {
+  (await import('./plugins/vue.js')).default(...args);
+}
