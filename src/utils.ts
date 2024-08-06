@@ -24,18 +24,44 @@ export function pathToNpmPackage(fullPath: string): [packageName: string, import
 export function makeParallelTaskMgr() {
   const queue: (() => Promise<void>)[] = [];
 
+  let maxConcurrency = 0;
+  let currentCurrency = 0;
+  let onLastWorkerExit: undefined | (() => void);  // undefined means not running
+
+  function fillUpWorker() {
+    while (currentCurrency < maxConcurrency && queue.length) {
+      currentCurrency++;
+      (async () => {
+        while (queue.length) {
+          let fn = queue.shift();
+          if (!fn) break;
+
+          await Promise.resolve().then(fn).catch(e => console.error(e));
+        }
+
+        currentCurrency--;
+        if (currentCurrency === 0 && onLastWorkerExit) onLastWorkerExit();
+      })();
+    }
+  }
+
   const push = (fn: () => Promise<void>) => {
     queue.push(fn);
+    if (onLastWorkerExit) fillUpWorker();
   }
   const run = async (concurrency: number = 5) => {
-    await Promise.all(
-      Array.from({ length: concurrency }, async () => {
-        while (queue.length) {
-          const fn = queue.shift()!;
-          await fn();
-        }
-      })
-    )
+    if (onLastWorkerExit) throw new Error("Already running");
+    maxConcurrency = concurrency;
+
+    const promise = new Promise<void>(resolve => {
+      onLastWorkerExit = () => {
+        onLastWorkerExit = undefined;
+        resolve();
+      };
+    });
+
+    fillUpWorker();
+    await promise;
   }
 
   return {

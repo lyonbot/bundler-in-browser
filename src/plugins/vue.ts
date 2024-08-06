@@ -38,7 +38,7 @@ function toESBuildError(e: string | SyntaxError | compiler.CompilerError): esbui
 
 export default function installVuePlugin(bundler: BundlerInBrowser, opts: {
   disableOptionsApi?: boolean;
-  enableDevTools?: boolean;
+  enableProdDevTools?: boolean;
   enableHydrationMismatchDetails?: boolean;
 } = {}) {
   const vendorPlugin: esbuild.Plugin = {
@@ -47,7 +47,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: {
       build.initialOptions.define = {
         ...build.initialOptions.define,
         "__VUE_OPTIONS_API__": opts.disableOptionsApi ? "false" : "true",
-        "__VUE_PROD_DEVTOOLS__": opts.enableDevTools ? "true" : "false",
+        "__VUE_PROD_DEVTOOLS__": opts.enableProdDevTools ? "true" : "false",
         "__VUE_PROD_HYDRATION_MISMATCH_DETAILS__": opts.enableHydrationMismatchDetails ? "true" : "false",
       }
     }
