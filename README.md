@@ -65,6 +65,43 @@ Calling `compile()` will run all of 3 stages.
 
 If you only need stage 1, use `bundler.bundleUserCode()` and it tells you what dependencies are required.
 
+## Plugins
+
+### `installSassPlugin`
+
+Add sass support. Requires `sass` installed.
+
+```ts
+import { BundlerInBrowser, installSassPlugin } from "bundler-in-browser";
+
+const bundler = new BundlerInBrowser(fs);
+await bundler.initialize({ ... });
+
+await installSassPlugin(bundler);
+
+// now you can compile .scss/.sass files
+const out = await bundler.compile(...);
+```
+
+### `installVuePlugin`
+
+Add vue 3 sfc (.vue) support. Requires `vue@^3.2.14` installed.
+
+```ts
+import { BundlerInBrowser, installVuePlugin } from "bundler-in-browser";
+
+const bundler = new BundlerInBrowser(fs);
+await bundler.initialize({ ... });
+
+await installVuePlugin(bundler, {
+  disableOptionsApi: false, // (default: false) enable this to make vendor bundle smaller
+  enableProdDevTools: false,  // (default: false) set true if PROD build requires devtool too
+});
+
+// now you can compile .vue files
+const out = await bundler.compile(...);
+```
+
 ## Tricks
 
 For NPM:
