@@ -23,6 +23,8 @@ export namespace BundlerInBrowser {
     /** defaults to `/index.js` */
     entrypoint?: string
 
+    minify?: boolean;
+
     /** eg. { "process.env.NODE_ENV": "production" } */
     define?: Record<string, string>;
   }
@@ -168,6 +170,7 @@ export class BundlerInBrowser {
       format: "cjs",
       target: "es2022",
       platform: "browser",
+      minify: !!opts?.minify,
       plugins: [
         ...this.userCodePlugins,
         npmCollectPlugin(), // after user plugins, before common plugins

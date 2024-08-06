@@ -45,10 +45,10 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: {
     name: "vue-loader-vendor",
     setup(build) {
       build.initialOptions.define = {
-        ...build.initialOptions.define,
         "__VUE_OPTIONS_API__": opts.disableOptionsApi ? "false" : "true",
         "__VUE_PROD_DEVTOOLS__": opts.enableProdDevTools ? "true" : "false",
         "__VUE_PROD_HYDRATION_MISMATCH_DETAILS__": opts.enableHydrationMismatchDetails ? "true" : "false",
+        ...build.initialOptions.define,
       }
     }
   }

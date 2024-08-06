@@ -24,6 +24,7 @@ export default defineConfig({
       external: [
         ...Object.keys(packageJSON.dependencies),
         ...Object.keys(packageJSON.peerDependencies),
+        'vue/compiler-sfc',
       ]
     },
     lib: {
