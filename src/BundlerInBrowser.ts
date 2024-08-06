@@ -22,6 +22,9 @@ export namespace BundlerInBrowser {
   export interface CompileUserCodeOptions {
     /** defaults to `/index.js` */
     entrypoint?: string
+
+    /** eg. { "process.env.NODE_ENV": "production" } */
+    define?: Record<string, string>;
   }
 }
 
@@ -198,6 +201,8 @@ export class BundlerInBrowser {
     hash: string;
     npmRequired: Set<string>;
     externalDeps: Set<string>;
+
+    define?: Record<string, string>;
   }) {
     await this.assertInitialized();
 
@@ -270,6 +275,8 @@ export class BundlerInBrowser {
       format: "cjs",
       target: "es2022",
       platform: "browser",
+      minify: true,
+      define: { ...opts.define },
       plugins: [
         {
           name: 'vendor-entry',
@@ -331,7 +338,8 @@ export class BundlerInBrowser {
     // phase 2: bundle vendor, including npm install
     // (may be skipped, if dep not changed)
 
-    const vendorHash = setToSortedArray(userCode.externalDeps).join(',');
+    const sortedDefine = Object.entries(opts?.define || {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join(';');
+    const vendorHash = `${setToSortedArray(userCode.externalDeps).join(',')}/${sortedDefine}`;
     const canReuseVendorBundle = (() => {
       const prev = this.lastVendorBundle?.externalDeps;
       if (!prev) return false;
@@ -345,6 +353,7 @@ export class BundlerInBrowser {
         hash: vendorHash,
         npmRequired: userCode.npmRequired,
         externalDeps: userCode.externalDeps,
+        define: opts?.define,
       }))
 
     log('vendor bundle done', vendorBundle)
