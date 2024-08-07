@@ -41,21 +41,21 @@ export namespace BundlerInBrowser {
     /** 
      * your custom `define` function name. defaults to `"define"` 
      * 
-     * Note: the function must have `amd` flag ( `define.amd == true` )
+     * Note: the function must have `amd` flag ( will check `define.amd == true` )
      */
     amdDefine?: string;
 
-    /** in UMD mode, module will expose at `self[umdGlobalName]` (usually self is `window`) */
+    /** 
+     * in UMD mode, module will expose at `self[umdGlobalName]` (usually self is `window`) 
+     */
     umdGlobalName?: string;
 
     /** 
-     * in UMD mode, your mock `require` function. set to null to disable 
+     * in UMD mode, your mock *require(id)* function. set to null to disable.
      * 
-     * @example
-     *   (id) => {
-     *     if (id === 'vue') return window.Vue;
-     *     throw new Error(`Cannot find module '${id}'`);
-     *   }
+     * this shall be a expression like `"window.myRequire"`, pointing to a function, which looks like `(id) => { return ... }`
+     * 
+     * @note you won't need this if `external` not set.
      */
     umdGlobalRequire?: string;
   }
@@ -351,15 +351,26 @@ export class BundlerInBrowser {
       'amdDefine' | 'umdGlobalName' | 'umdGlobalRequire'> = {},
   ) {
     const external = new Set(([...userCode.external]).concat(...dlls.map(dll => dll.external)));
+
     const amdDefine = opts.amdDefine || 'define';
+    let amdDefineExists = '';  // typically is `typeof define === 'function' && define.amd`
+    {
+      let i = -1, first = true;
+      while ((i = amdDefine.indexOf('.', i + 1)) !== -1) {
+        if (first) { first = false; amdDefineExists += `typeof ${amdDefine.slice(0, i)} !== 'undefined' && `; }
+        amdDefineExists += `!!(${amdDefine.slice(0, i)}) && `;
+      }
+      amdDefineExists += `typeof ${amdDefine} === 'function' && ${amdDefine}.amd`;
+    }
+
     const finalJs = [
       `(function (root, factory) {`,
-      `  if (typeof ${amdDefine} === 'function' && ${amdDefine}.amd) {`, // AMD
+      `  if (${amdDefineExists}) {`, // AMD
       `    ${amdDefine}(${JSON.stringify(['require', ...external])}, factory);`,
       `  } else if (typeof module === 'object' && module.exports) {`, // CommonJS
       `    module.exports = factory(typeof require === 'function' ? require : undefined);`,
       `  } else {`, // browser
-      opts.umdGlobalName ? `  root[${JSON.stringify(opts.umdGlobalName)}] = ` : '',
+      (opts.umdGlobalName ? `  root[${JSON.stringify(opts.umdGlobalName)}] = ` : '') +
       `    factory(${opts.umdGlobalRequire || '() => { throw new Error("require not implemented") }'}\n);`,
       `  }`,
       `})(typeof self !== 'undefined' ? self : this, (require) => (`, // outerRequire
@@ -428,7 +439,7 @@ export class BundlerInBrowser {
 
     // phase 3: concat all into one file
 
-    const final = this.concatUserCodeAndVendors(userCode, [vendorBundle])
+    const final = this.concatUserCodeAndVendors(userCode, [vendorBundle], opts)
     log('phase3output', final);
 
     return {
