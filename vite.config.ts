@@ -16,6 +16,7 @@ export default defineConfig({
       'stream': 'streamx',
       'fs': require.resolve('./src/dirty-stuff/empty-object.cjs'),
       'graceful-fs': require.resolve('./src/dirty-stuff/empty-object.cjs'),
+      'util': require.resolve('./src/dirty-stuff/util.js'),
     }
   },
   plugins: [dts({ rollupTypes: true })],

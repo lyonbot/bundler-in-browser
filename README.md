@@ -7,10 +7,9 @@ a bundler in browser, auto install npm packages, powered by esbuild-wasm
 ## Usage
 
 ```sh
-npm install bundler-in-browser esbuild-wasm@0.23.0 memfs
+npm install bundler-in-browser memfs
 
-# 1. remember the version of esbuild-wasm!
-# 2. memfs is optional, but recommended
+# memfs is optional, but recommended
 ```
 
 ```ts
@@ -33,7 +32,7 @@ const fs = Volume.fromJSON({
 
 const bundler = new BundlerInBrowser(fs);
 await bundler.initialize({
-  esbuildWasmURL: "https://cdn.jsdelivr.net/npm/esbuild-wasm@0.23.0/esbuild.wasm", // match your installed version!
+  // esbuildWasmURL: `https://cdn.jsdelivr.net/npm/esbuild-wasm@${BundlerInBrowser.esbuildVersion}/esbuild.wasm`,  // optional
 });
 
 // compile!

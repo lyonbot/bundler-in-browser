@@ -1,3 +1,7 @@
+export function escapeRegExp(text: string) {
+  return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+}
+
 export function toPairs<T>(obj: Record<string, T> | null | undefined) {
   if (!obj) return [];
   return Object.entries(obj) as [string, T][];

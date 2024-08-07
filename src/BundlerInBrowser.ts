@@ -3,7 +3,7 @@ import './dirty-stuff/monkey-patch.js';
 import esbuild from "esbuild-wasm";
 import { create as createResolver } from 'enhanced-resolve'
 import { MiniNPM } from "./MiniNPM.js";
-import { wrapCommonJS, pathToNpmPackage, makeParallelTaskMgr } from './utils.js';
+import { wrapCommonJS, pathToNpmPackage, makeParallelTaskMgr, escapeRegExp } from './utils.js';
 import { log } from './log.js';
 
 import type { IFs } from "memfs";
@@ -12,9 +12,10 @@ const setToSortedArray = (set: Set<string>) => Array.from(set).sort()
 
 export namespace BundlerInBrowser {
   export interface VendorBundleResult {
-    hash: string; // concat of sorted externalDeps
+    hash: string; // concat of sorted exposedDeps
 
-    externalDeps: string[];
+    exports: string[];
+    external: string[];
     js: string;  // export `dep${index}`
     css: string;
   }
@@ -27,6 +28,36 @@ export namespace BundlerInBrowser {
 
     /** eg. { "process.env.NODE_ENV": "production" } */
     define?: Record<string, string>;
+
+    /** 
+     * all these deps will NOT be bundled.
+     * 
+     * - `"@foo/bar"` contains `@foo/bar/baz.js`
+     * - you can use wildcards like `"*.png"`
+     * - `/^vue$/` will NOT match `/vue/dist/vue.esm-bundler.js`
+     */
+    external?: (string | RegExp)[];
+
+    /** 
+     * your custom `define` function name. defaults to `"define"` 
+     * 
+     * Note: the function must have `amd` flag ( `define.amd == true` )
+     */
+    amdDefine?: string;
+
+    /** in UMD mode, module will expose at `self[umdGlobalName]` (usually self is `window`) */
+    umdGlobalName?: string;
+
+    /** 
+     * in UMD mode, your mock `require` function. set to null to disable 
+     * 
+     * @example
+     *   (id) => {
+     *     if (id === 'vue') return window.Vue;
+     *     throw new Error(`Cannot find module '${id}'`);
+     *   }
+     */
+    umdGlobalRequire?: string;
   }
 }
 
@@ -39,13 +70,13 @@ export class BundlerInBrowser {
     await this.initialized;
   }
 
-  async initialize(opt: { esbuildWasmURL: string | URL }) {
+  static readonly esbuildVersion = esbuild.version;
+
+  async initialize(opt: { esbuildWasmURL?: string | URL } = {}) {
     if (!this.initialized) {
       this.initialized = esbuild.initialize({
-        wasmURL: opt.esbuildWasmURL
-        // wasmURL: esbuildWasm
+        wasmURL: opt.esbuildWasmURL || `https://cdn.jsdelivr.net/npm/esbuild-wasm@${esbuild.version}/esbuild.wasm`
         // wasmModule: await WebAssembly.compileStreaming(fetch('/node_modules/esbuild-wasm/esbuild.wasm'))
-        // wasmURL: "https://cdn.jsdelivr.net/npm/esbuild-wasm@0.23.0/esbuild.wasm",
       });
     }
     await this.initialized;
@@ -140,7 +171,8 @@ export class BundlerInBrowser {
     await this.assertInitialized();
 
     const npmRequired = new Set<string>();
-    const externalDeps = new Set<string>();
+    const vendorExports = new Set<string>();
+    const externalCollect = getExternalPlugin(opts?.external);
 
     const npmCollectPlugin = (): esbuild.Plugin => {
       return ({
@@ -151,7 +183,7 @@ export class BundlerInBrowser {
             let [packageName] = pathToNpmPackage(fullPath)
 
             npmRequired.add(packageName);
-            externalDeps.add(fullPath);
+            vendorExports.add(fullPath);
 
             return {
               path: fullPath,
@@ -172,6 +204,7 @@ export class BundlerInBrowser {
       platform: "browser",
       minify: !!opts?.minify,
       plugins: [
+        externalCollect.plugin,
         ...this.userCodePlugins,
         npmCollectPlugin(), // after user plugins, before common plugins
         ...this.commonPlugins,
@@ -189,7 +222,8 @@ export class BundlerInBrowser {
       js: userJs,
       css: userCss,
       npmRequired,
-      externalDeps,
+      vendorExports,
+      external: externalCollect.collected,
       esbuildOutput: output,
     }
   }
@@ -203,13 +237,16 @@ export class BundlerInBrowser {
   async bundleVendor(opts: {
     hash: string;
     npmRequired: Set<string>;
-    externalDeps: Set<string>;
+    exports: Set<string>;
 
+    external?: (string | RegExp)[];
     define?: Record<string, string>;
   }) {
     await this.assertInitialized();
 
-    const externalDeps = Array.from(opts.externalDeps)
+    const exposedDeps = Array.from(opts.exports)
+    const externalCollect = getExternalPlugin(opts.external);
+
     const rootPackageJson = {
       name: 'root',
       version: '0.0.0',
@@ -253,7 +290,8 @@ export class BundlerInBrowser {
     // create a new bundle
     const vendor: BundlerInBrowser.VendorBundleResult = {
       hash: opts.hash,
-      externalDeps,
+      exports: exposedDeps,
+      external: [],
       js: '',
       css: '',
     }
@@ -264,8 +302,8 @@ export class BundlerInBrowser {
     let entryPathRegex = new RegExp(`^${entryPath}$`)
     let entryContent = 'exports.deps = {\n'
 
-    for (let i = 0; i < externalDeps.length; i++) {
-      const dep = externalDeps[i];
+    for (let i = 0; i < exposedDeps.length; i++) {
+      const dep = exposedDeps[i];
       entryContent += `"${dep}": () => require("${dep}"),\n`
     }
     entryContent += '};'
@@ -293,6 +331,7 @@ export class BundlerInBrowser {
             })
           }
         },
+        externalCollect.plugin,
         ...this.vendorPlugins,
         ...this.commonPlugins,
       ],
@@ -300,22 +339,43 @@ export class BundlerInBrowser {
 
     vendor.js = buildOutput.outputFiles.find(x => x.path.endsWith('.js'))?.text || '';
     vendor.css = buildOutput.outputFiles.find(x => x.path.endsWith('.css'))?.text || '';
+    vendor.external = Array.from(externalCollect.collected);
 
     return vendor;
   }
 
   concatUserCodeAndVendors(
-    userCode: { css: string, js: string },
+    userCode: { css: string, js: string; external: Set<string> },
     dlls: BundlerInBrowser.VendorBundleResult[],
+    opts: Pick<BundlerInBrowser.CompileUserCodeOptions,
+      'amdDefine' | 'umdGlobalName' | 'umdGlobalRequire'> = {},
   ) {
+    const external = new Set(([...userCode.external]).concat(...dlls.map(dll => dll.external)));
+    const amdDefine = opts.amdDefine || 'define';
     const finalJs = [
-      `var require = (()=>{`,
+      `(function (root, factory) {`,
+      `  if (typeof ${amdDefine} === 'function' && ${amdDefine}.amd) {`, // AMD
+      `    ${amdDefine}(${JSON.stringify(['require', ...external])}, factory);`,
+      `  } else if (typeof module === 'object' && module.exports) {`, // CommonJS
+      `    module.exports = factory(typeof require === 'function' ? require : undefined);`,
+      `  } else {`, // browser
+      opts.umdGlobalName ? `  root[${JSON.stringify(opts.umdGlobalName)}] = ` : '',
+      `    factory(${opts.umdGlobalRequire || '() => { throw new Error("require not implemented") }'}\n);`,
+      `  }`,
+      `})(typeof self !== 'undefined' ? self : this, (require) => (`, // outerRequire
+      `((require) => ${wrapCommonJS(userCode.js)})(`,
+      /* a wrapped require function, which will load vendor's deps */
+      `((outerRequire)=>{`,
       ` const $$deps={}, $$depsLoaded=Object.create(null),`, // deps =  { "foobar": () => module.exports }
-      ` require = name => { (name in $$depsLoaded) || ($$depsLoaded[name] = $$deps[name]()); return $$depsLoaded[name]; };`,
+      ` require = name => { `,
+      `   if (!(name in $$deps)) return outerRequire(name);`, // unknown dep goes to outerRequire
+      `   (name in $$depsLoaded) || ($$depsLoaded[name] = $$deps[name]());`,
+      `   return $$depsLoaded[name];`,
+      ` };`,
       ...dlls.map(dll => `Object.assign($$deps, ${wrapCommonJS(dll.js)}.deps);`),
       ` return require;`,
-      '})();',
-      userCode.js,
+      '})(require))',
+      '))',
     ].join('\n')
 
     const finalCss = [
@@ -323,7 +383,8 @@ export class BundlerInBrowser {
       userCode.css,
     ].join('\n')
 
-    return { js: finalJs, css: finalCss }
+
+    return { js: finalJs, css: finalCss, external }
   }
 
   /** cached result of `bundleVendor()`, only for `compile()` */
@@ -341,21 +402,25 @@ export class BundlerInBrowser {
     // phase 2: bundle vendor, including npm install
     // (may be skipped, if dep not changed)
 
-    const sortedDefine = Object.entries(opts?.define || {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join(';');
-    const vendorHash = `${setToSortedArray(userCode.externalDeps).join(',')}/${sortedDefine}`;
+    const vendorHash = [
+      /* vendor's import */ opts?.external?.join('|'),
+      /* vendor's exports */ setToSortedArray(userCode.vendorExports).join(','),
+      /* define */ Object.entries(opts?.define || {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join(';'),
+    ].join('\n');
+
     const canReuseVendorBundle = (() => {
-      const prev = this.lastVendorBundle?.externalDeps;
+      const prev = this.lastVendorBundle?.exports;
       if (!prev) return false;
 
       const prevSet = new Set(prev);
-      return Array.from(userCode.externalDeps).every(dep => prevSet.has(dep));
+      return Array.from(userCode.vendorExports).every(dep => prevSet.has(dep));
     })();
     const vendorBundle = canReuseVendorBundle
       ? this.lastVendorBundle!
       : (this.lastVendorBundle = await this.bundleVendor({
         hash: vendorHash,
         npmRequired: userCode.npmRequired,
-        externalDeps: userCode.externalDeps,
+        exports: userCode.vendorExports,
         define: opts?.define,
       }))
 
@@ -371,8 +436,47 @@ export class BundlerInBrowser {
       css: final.css,
       vendorBundle,
       npmRequired: Array.from(userCode.npmRequired),
-      externalDeps: Array.from(userCode.externalDeps),
+      external: Array.from(userCode.external),
+      vendorExports: Array.from(userCode.vendorExports),
     }
   }
 }
 
+function getExternalPlugin(external?: (string | RegExp)[]) {
+  const regexParts: { [flags: string]: string[] } = {};
+  for (const e of external || []) {
+    if (!e) continue;
+
+    let flags = '', source = '';
+    if (e instanceof RegExp) {
+      flags = e.flags;
+      source = e.source;
+    } else {
+      source = '^' + escapeRegExp(e).replace(/\\\*/g, '.*');
+    }
+
+    if (!regexParts[flags]) regexParts[flags] = [];
+    regexParts[flags].push(source);
+  }
+
+  const allRegex = Object
+    .entries(regexParts)
+    .map(([flags, sources]) => new RegExp(`(${sources.join(')|(')})`, flags))
+
+  const collected = new Set<string>();
+  const plugin: esbuild.Plugin = {
+    name: 'external',
+    setup(build) {
+      if (!allRegex.length) return;
+
+      build.onResolve({ filter: /.*/ }, async (args) => {
+        if (allRegex.some(regex => regex.test(args.path))) {
+          collected.add(args.path);
+          return { path: args.path, external: true }
+        }
+      })
+    },
+  }
+
+  return { collected, plugin }
+}
