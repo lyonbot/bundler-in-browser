@@ -3,7 +3,7 @@ import './dirty-stuff/monkey-patch.js';
 import esbuild from "esbuild-wasm";
 import { create as createResolver } from 'enhanced-resolve'
 import { MiniNPM } from "./MiniNPM.js";
-import { wrapCommonJS, pathToNpmPackage, makeParallelTaskMgr, escapeRegExp } from './utils.js';
+import { wrapCommonJS, pathToNpmPackage, makeParallelTaskMgr, escapeRegExp, cloneDeep } from './utils.js';
 import { log } from './log.js';
 
 import type { IFs } from "memfs";
@@ -400,6 +400,24 @@ export class BundlerInBrowser {
 
   /** cached result of `bundleVendor()`, only for `compile()` */
   lastVendorBundle: undefined | BundlerInBrowser.VendorBundleResult
+
+  loadVendorBundle(bundle: BundlerInBrowser.VendorBundleResult | undefined | null) {
+    if (!bundle) return;
+
+    const b = {} as BundlerInBrowser.VendorBundleResult;
+    b.css = bundle.css || '';
+    b.js = bundle.js || '';
+    b.external = Array.from(bundle.external || []);
+    b.exports = Array.from(bundle.exports || []);
+    b.hash = bundle.hash || '';
+
+    if (!b.css || !b.js || !b.hash) return; // invalid bundle
+    this.lastVendorBundle = b;
+  }
+
+  dumpVendorBundle() {
+    return cloneDeep(this.lastVendorBundle);
+  }
 
   async compile(opts?: BundlerInBrowser.CompileUserCodeOptions) {
     await this.assertInitialized();

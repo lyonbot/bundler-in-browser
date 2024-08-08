@@ -103,18 +103,30 @@ const out = await bundler.compile(...);
 
 ## Tricks
 
-For NPM:
+### npm
 
-- You can specify dependencies version in `/package.json`
+- You can create `/package.json` to specify dependencies version
 
-- When new npm required, built-in npm client "MiniNPM" can quickly install them -- it has cache and lock file.
+- The builtin npm client "MiniNPM" has its own cache and lock file, so it can quickly install dependencies.
 
 - Change npm registry: `bundler.npm.options.registryUrl = "https://mirrors.cloud.tencent.com/npm";`
 
 - To observe progress: `bundler.npm.events.on("progress", e => console.log("[npm]", e));`
 
-For bundler:
+### vendor bundle (npm dependencies)
 
-- Stage 2 may auto-skipped, if no new dependencies found in user code.
+If user code changed but no new `import` statements, vendor-bundling will be skipped (using previous cached bundle).
 
-- To reset "stage 2" vendor cache: `bundler.lastVendorBundle = undefined;`
+You can export vendor bundle, and load it in another `BundlerInBrowser` instance.
+
+```js
+const vendor = bundler.dumpVendorBundle();
+saveToDisk("myVendor.json", vendor);
+
+// ... later somewhere else ...
+
+const loadedVendor = loadFromDisk("myVendor.json");
+bundler.loadVendorBundle(loadedVendor);
+```
+
+To clear vendor cache: `bundler.loadVendorBundle(null);`

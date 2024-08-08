@@ -2,6 +2,13 @@ export function escapeRegExp(text: string) {
   return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 }
 
+export function cloneDeep<T>(obj: T): T {
+  if (typeof obj !== 'object' || obj === null) return obj;
+  if (Array.isArray(obj)) return obj.map(cloneDeep) as any;
+  if (obj instanceof Set) return new Set(Array.from(obj).map(cloneDeep)) as any;
+  return { ...obj }
+}
+
 export function toPairs<T>(obj: Record<string, T> | null | undefined) {
   if (!obj) return [];
   return Object.entries(obj) as [string, T][];
