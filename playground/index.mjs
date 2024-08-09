@@ -122,7 +122,7 @@ await compiler.initialize({
 });
 
 installSassPlugin(compiler);
-installVuePlugin(compiler);
+installVuePlugin(compiler, { enableProdDevTools: true });
 
 const out = await compiler.compile()
   .catch(err => {
