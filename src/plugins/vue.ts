@@ -18,17 +18,70 @@ function getUrlParams(search: string): Record<string, string> {
   }, {})
 }
 
-function toESBuildError(e: string | SyntaxError | compiler.CompilerError): esbuild.PartialMessage {
+function getLineContent(code: string, offset: number) {
+  let lineStart = 0;
+  let line = 1;
+  let lineEnd = code.length;
+
+  while (true) {
+    lineEnd = code.indexOf('\n', lineStart);
+
+    if (lineEnd === -1) { lineEnd = code.length; break; }
+    if (offset <= lineEnd) break;
+
+    line++;
+    lineStart = lineEnd + 1;
+  }
+
+  return {
+    line,
+    column: offset - lineStart,
+    lineText: code.slice(lineStart, lineEnd)
+  }
+}
+
+/**
+ * @param source 
+ * @param line start from 1
+ * @returns 
+ */
+function getLineText(source: string, line: number) {
+  let lineStart = 0;
+  let lineEnd = source.length;
+
+  while (true) {
+    lineEnd = source.indexOf('\n', lineStart);
+
+    if (lineEnd === -1) { lineEnd = source.length; break; }
+    if (line <= 1) break;
+
+    line--;
+    lineStart = lineEnd + 1;
+  }
+
+  return source.slice(lineStart, lineEnd)
+}
+
+function toESBuildError(
+  e: string | SyntaxError | compiler.CompilerError,
+  ctx: {
+    offsetToPosition?: (offset: number) => { line: number, column: number, lineText?: string }
+    currentFile: string
+  }
+): esbuild.PartialMessage {
   if (typeof e === 'string') return { text: e };
 
   if (e instanceof Error) {
-    if ('loc' in e && e.loc) return {
-      text: e.message,
-      location: {
-        file: e.loc.source,
-        line: e.loc.start.line,
-        column: e.loc.start.column
-      },
+    if ('loc' in e && e.loc) {
+      const locator = ctx.offsetToPosition?.(e.loc.start.offset) || { line: e.loc.start.line, column: e.loc.start.column }
+      return {
+        text: e.message,
+        location: {
+          file: e.loc.source || ctx.currentFile,
+          ...locator,
+          length: e.loc.end.offset - e.loc.start.offset,
+        },
+      }
     };
     return { text: e.message };
   }
@@ -80,6 +133,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: {
       build.onLoad({ filter: /./, namespace: "sfc-style" }, async (args) => {
         const descriptor = args.pluginData.vue.descriptor as compiler.SFCDescriptor;
         const id = args.pluginData.vue.id;
+        const toESBuildErrorCtx = args.pluginData.vue.toESBuildErrorCtx;
         const style = descriptor.styles[args.pluginData.index];
 
         const preprocessCustomRequire = /s[ac]ss/.test(style.lang!) ? await getPreprocessCustomRequireWithSass() : undefined
@@ -97,7 +151,17 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: {
         });
 
         const errors = errorsAll.filter((e, i) => !(i === 0 && e.message.includes('pathToFileURL')));
-        if (errors.length > 0) return { errors: errors.map(toESBuildError) };
+        if (errors.length > 0) return {
+          errors: errors.map((e: any): esbuild.PartialMessage => ({
+            text: 'style: ' + e.reason,
+            location: {
+              file: toESBuildErrorCtx.currentFile,
+              line: e.line - 1 + style.loc.start.line,
+              column: e.column - 1,
+              lineText: getLineText(e.source, e.line),
+            }
+          }))
+        };
 
         return {
           contents: code,
@@ -108,13 +172,18 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: {
 
       build.onLoad({ filter: /./, namespace: "sfc-script" }, async (args) => {
         const descriptor = args.pluginData.vue.descriptor as compiler.SFCDescriptor;
-        const { id, scopeId, expressionPlugins } = args.pluginData.vue;
+        const { id, scopeId, expressionPlugins, toESBuildErrorCtx, esbuildLoader, hasJSX } = args.pluginData.vue;
 
         const filename = descriptor.filename;
         const compiledScript = compiler.compileScript(descriptor, {
           inlineTemplate: true,
           id,
           genDefaultAs: COMP_IDENTIFIER,
+          fs: {
+            fileExists: (file) => bundler.fs.existsSync(file),
+            readFile: (file) => { try { return bundler.fs.readFileSync(file, 'utf8') as string; } catch { } },
+            realpath: (file) => bundler.fs.realpathSync(file, { encoding: 'utf8' }) as string,
+          },
           templateOptions: {
             ast: descriptor.template?.ast,
             compilerOptions: {
@@ -125,12 +194,17 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: {
           },
         });
 
-        const errors = compiledScript.warnings?.map(toESBuildError) || [];
+        const errors = compiledScript.warnings?.map(e => toESBuildError(e, toESBuildErrorCtx)) || [];
         if (errors.length > 0) return { errors };
 
+        let codePrefix = '';
+        if (hasJSX) {
+          codePrefix += '/** @jsx vueH */\n/** @jsxFrag vueFragment */\nimport { h as vueH, Fragment as vueFragment } from "vue";\n';
+        }
+
         return {
-          contents: compiledScript.content + '\n\nexport default ' + COMP_IDENTIFIER,
-          loader: 'js',
+          contents: codePrefix + compiledScript.content + '\n\nexport default ' + COMP_IDENTIFIER,
+          loader: esbuildLoader,
           watchFiles: [filename],
           pluginData: { ...args.pluginData }
         }
@@ -148,7 +222,14 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: {
           sourceMap: true,
         });
 
-        if (errors.length > 0) return { errors: errors.map(toESBuildError) };
+        const toESBuildErrorCtx: Parameters<typeof toESBuildError>[1] = {
+          currentFile: descriptor.filename,
+          offsetToPosition: (offset: number) => getLineContent(code, offset),
+        }
+        if (errors.length > 0) return {
+          contents: code,
+          errors: errors.map(e => toESBuildError(e, toESBuildErrorCtx))
+        };
 
         const hasScopedStyle = descriptor.styles.some(s => s.scoped);
         const scopeId = hasScopedStyle ? `data-v-${id}` : null;
@@ -194,7 +275,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: {
               expressionPlugins,
             },
           });
-          if (errors.length > 0) return { errors: errors.map(toESBuildError) };
+          if (errors.length > 0) return { errors: errors.map(e => toESBuildError(e, toESBuildErrorCtx)) };
 
           outCodeParts.push(
             rawCode.replace(/\nexport (function|const) (render|ssrRender)/, '$1 ___render'),
@@ -212,12 +293,16 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: {
           );
         }
 
+        let loader: esbuild.Loader = 'js';
+        if (hasTS) loader = 'ts';
+        if (hasJSX) loader = (loader + 'x') as 'jsx' | 'tsx';
+
         return {
           contents: outCodeParts.join('\n'),
-          loader: 'js',
+          loader,
           watchFiles: [filename],
           pluginData: {
-            vue: { descriptor, id, scopeId, expressionPlugins }
+            vue: { descriptor, id, scopeId, expressionPlugins, toESBuildErrorCtx, esbuildLoader: loader, hasTS, hasJSX }
           }
         }
       })

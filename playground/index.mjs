@@ -124,7 +124,11 @@ await compiler.initialize({
 installSassPlugin(compiler);
 installVuePlugin(compiler);
 
-const out = await compiler.compile();
+const out = await compiler.compile()
+  .catch(err => {
+    console.error('Compile error:', err.errors);
+    throw err
+  })
 console.log('compiled', out);
 
 const style = document.createElement('style');
