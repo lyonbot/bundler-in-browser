@@ -1,6 +1,6 @@
 # bundler-in-browser
 
-[![npm version](https://img.shields.io/npm/v/bundler-in-browser.svg)](https://www.npmjs.com/package/bundler-in-browser) [![github](https://img.shields.io/badge/github-source-blue)](https://github.com/lyonbot/bundler-in-browser) [![playground](https://img.shields.io/badge/playground-online-green)](https://lyonbot.github.io/bundler-in-browser/)
+[![npm version](https://img.shields.io/npm/v/bundler-in-browser.svg)](https://www.npmjs.com/package/bundler-in-browser) [![github](https://img.shields.io/badge/github-source-blue)](https://github.com/lyonbot/bundler-in-browser) [![example](https://img.shields.io/badge/example-online-green)](https://lyonbot.github.io/bundler-in-browser/)
 
 a bundler in browser, auto install npm packages, powered by esbuild-wasm
 
