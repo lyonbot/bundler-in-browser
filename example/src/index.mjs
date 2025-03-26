@@ -19,6 +19,8 @@ const fs = new Proxy({}, {
 window.fs = fs;
 main();
 
+const pre = document.getElementById('compile-log');
+
 async function main() {
   const compiler = new BundlerInBrowser(fs);
 
@@ -45,14 +47,25 @@ async function main() {
     })
   log('🎉 compiled', out);
 
+
+  // insert compiled css
   const style = document.createElement('style');
   document.head.appendChild(style);
   style.textContent = out.css;
 
+  // run compiled js
   const fn = new Function(wrapCommonJS(out.js));
   fn();
+
+  // remove log
+  pre.remove();
 }
 
 function log(...args) {
-  console.log(dayjs().format('HH:mm:ss'), ...args);
+  const t = dayjs().format('HH:mm:ss');
+  console.log(t, ...args);
+  const div = document.createElement('div');
+  div.textContent = t + ' ' + args.join(' ');
+  pre.appendChild(div);
+  pre.scrollTop = pre.scrollHeight;
 }
