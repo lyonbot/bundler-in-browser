@@ -1,8 +1,4 @@
-import { Volume } from "memfs";
-import esbuildWasmURL from "esbuild-wasm/esbuild.wasm?url";
-import { BundlerInBrowser, installSassPlugin, installVuePlugin, wrapCommonJS } from "bundler-in-browser";
-
-const fsRaw = (Volume.fromJSON({
+export const fsData = {
   "/index.js": `
 import confetti from "canvas-confetti";
 confetti();
@@ -96,41 +92,6 @@ const SQLEditor = () => {
 
 export default SQLEditor;
 `
-
   // "/index.js": `import { hello } from "./hello.js";\n console.log(hello());`,
   // "/hello.js": `import { v4 } from "uuid";\n export function hello() { return "hello " + v4(); }`,
-}));
-const fs = new Proxy({}, {
-  get(target, prop) {
-    let raw = target[prop];
-    if (raw) return raw;
-
-    let fromFs = fsRaw[prop]
-    if (typeof fromFs === "function") fromFs = fromFs.bind(fsRaw);
-    return fromFs
-  },
-})
-
-window.fs = fs;
-
-const compiler = new BundlerInBrowser(fs);
-await compiler.initialize({
-  esbuildWasmURL: esbuildWasmURL
-});
-
-await installSassPlugin(compiler);
-await installVuePlugin(compiler, { enableProdDevTools: true });
-
-const out = await compiler.compile()
-  .catch(err => {
-    console.error('Compile error:', err.errors);
-    throw err
-  })
-console.log('compiled', out);
-
-const style = document.createElement('style');
-document.head.appendChild(style);
-style.textContent = out.css;
-
-const fn = new Function(wrapCommonJS(out.js));
-fn();
+};
