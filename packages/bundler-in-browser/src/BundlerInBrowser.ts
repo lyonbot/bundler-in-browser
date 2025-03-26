@@ -2,7 +2,7 @@ import esbuild from "esbuild-wasm";
 import { create as createResolver } from 'enhanced-resolve'
 import { MiniNPM } from "./MiniNPM.js";
 import { wrapCommonJS, pathToNpmPackage, makeParallelTaskMgr, escapeRegExp, cloneDeep } from './utils.js';
-import { log } from './log.js';
+import { EventEmitter } from "./EventEmitter.js";
 
 import type { IFs } from "memfs";
 
@@ -59,8 +59,20 @@ export namespace BundlerInBrowser {
   }
 }
 
+export interface BundlerInBrowserEvents {
+  'initialized': () => void;
+  'compile:start': () => void;
+  'compile:usercode': (result: { npmRequired: Set<string>, vendorExports: Set<string>, external: Set<string> }) => void;
+  'compile:vendor': (result: BundlerInBrowser.VendorBundleResult) => void;
+  'npm:progress': (event: MiniNPM.ProgressEvent) => void;
+  'npm:packagejson:update': (newPackageJson: any) => void;
+  'npm:install:done': () => void;
+}
+
 export class BundlerInBrowser {
   public readonly fs: IFs;
+
+  public events = new EventEmitter<BundlerInBrowserEvents>();
 
   initialized: Promise<void> | false = false;
   private async assertInitialized() {
@@ -91,7 +103,7 @@ export class BundlerInBrowser {
     });
 
     this.npm.events.on('progress', event => {
-      log('[npm]', event.stage, (event.dependentId || '') + ' > ', event.packageId, event.current + '/' + event.total);
+      this.events.emit('npm:progress', event);
     });
 
     const resolvePlugin = (): esbuild.Plugin => {
@@ -260,7 +272,7 @@ export class BundlerInBrowser {
         if (!rootPackageJson.dependencies) rootPackageJson.dependencies = {};
       }
     } catch (err) {
-      log('read package.json failed. fallback to empty object', err);
+      // Silent fail, package.json is optional
     }
 
     // add missing npm dependencies
@@ -278,12 +290,11 @@ export class BundlerInBrowser {
     await addingMissingDepTasks.run()
 
     // write package.json
+    this.events.emit('npm:packagejson:update', rootPackageJson);
     await this.fs.promises.writeFile('/package.json', JSON.stringify(rootPackageJson, null, 2));
-    log('write package.json done', rootPackageJson);
 
-    // wait for all npm installs to finish
     await this.npm.install(rootPackageJson.dependencies);
-    log('npm install done');
+    this.events.emit('npm:install:done');
 
     // create a new bundle
     const vendor: BundlerInBrowser.VendorBundleResult = {
@@ -419,12 +430,16 @@ export class BundlerInBrowser {
 
   async compile(opts?: BundlerInBrowser.CompileUserCodeOptions) {
     await this.assertInitialized();
-    log('Start compiling')
+    this.events.emit('compile:start');
 
     // stage 1: compile user code, collect npm dependencies, yields CommonJS module
 
     const userCode = await this.bundleUserCode(opts);
-    log('user code compile done', userCode);
+    this.events.emit('compile:usercode', {
+      npmRequired: userCode.npmRequired,
+      vendorExports: userCode.vendorExports,
+      external: userCode.external
+    });
 
     // phase 2: bundle vendor, including npm install
     // (may be skipped, if dep not changed)
@@ -451,12 +466,11 @@ export class BundlerInBrowser {
         define: opts?.define,
       }))
 
-    log('vendor bundle done', vendorBundle)
+    this.events.emit('compile:vendor', vendorBundle);
 
     // phase 3: concat all into one file
 
     const final = this.concatUserCodeAndVendors(userCode, [vendorBundle], opts)
-    log('phase3output', final);
 
     return {
       js: final.js,

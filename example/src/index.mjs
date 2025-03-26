@@ -1,4 +1,5 @@
 import { Volume } from "memfs";
+import dayjs from "dayjs";
 import esbuildWasmURL from "esbuild-wasm/esbuild.wasm?url";
 import { BundlerInBrowser, installSassPlugin, installVuePlugin, wrapCommonJS } from "bundler-in-browser";
 import { fsData } from "./fsData.mjs";
@@ -20,6 +21,16 @@ main();
 
 async function main() {
   const compiler = new BundlerInBrowser(fs);
+
+  compiler.events.on('initialized', () => log('initialized'));
+  compiler.events.on('npm:progress', (e) => log(`[npm] [${e.stage}] [${e.current} / ${e.total}] ${e.packageId}`));
+  compiler.events.on('npm:install:done', (e) => log(`[npm] install:done`));
+
+  compiler.events.on('compile:start', () => log('compile:start'));
+  compiler.events.on('compile:usercode', (result) => log('compile:usercode', result));
+  compiler.events.on('compile:vendor', (result) => log('compile:vendor', result));
+
+
   await compiler.initialize({
     esbuildWasmURL: esbuildWasmURL
   });
@@ -32,7 +43,7 @@ async function main() {
       console.error('Compile error:', err.errors);
       throw err
     })
-  console.log('compiled', out);
+  log('🎉 compiled', out);
 
   const style = document.createElement('style');
   document.head.appendChild(style);
@@ -40,4 +51,8 @@ async function main() {
 
   const fn = new Function(wrapCommonJS(out.js));
   fn();
+}
+
+function log(...args) {
+  console.log(dayjs().format('HH:mm:ss'), ...args);
 }
