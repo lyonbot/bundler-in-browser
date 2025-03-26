@@ -4,6 +4,7 @@ import { defineConfig } from 'vite'
 const require = createRequire(import.meta.url);
 
 export default defineConfig({
+  base: './',
   define: {
     'process.env.NODE_ENV': '"development"',
     'process.platform': '"browser"',
