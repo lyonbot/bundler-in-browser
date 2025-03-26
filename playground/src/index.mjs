@@ -1,9 +1,6 @@
 import { Volume } from "memfs";
-import { BundlerInBrowser } from "../src/index";
 import esbuildWasmURL from "esbuild-wasm/esbuild.wasm?url";
-import installSassPlugin from "../src/plugins/sass";
-import installVuePlugin from "../src/plugins/vue";
-import { wrapCommonJS } from "../src/utils";
+import { BundlerInBrowser, installSassPlugin, installVuePlugin, wrapCommonJS } from "bundler-in-browser";
 
 const fsRaw = (Volume.fromJSON({
   "/index.js": `
@@ -121,8 +118,8 @@ await compiler.initialize({
   esbuildWasmURL: esbuildWasmURL
 });
 
-installSassPlugin(compiler);
-installVuePlugin(compiler, { enableProdDevTools: true });
+await installSassPlugin(compiler);
+await installVuePlugin(compiler, { enableProdDevTools: true });
 
 const out = await compiler.compile()
   .catch(err => {

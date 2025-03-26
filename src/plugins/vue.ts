@@ -89,11 +89,13 @@ function toESBuildError(
   return { text: String(e) }
 }
 
-export default function installVuePlugin(bundler: BundlerInBrowser, opts: {
+export interface InstallVuePluginOptions {
   disableOptionsApi?: boolean;
   enableProdDevTools?: boolean;
   enableHydrationMismatchDetails?: boolean;
-} = {}) {
+}
+
+export default function installVuePlugin(bundler: BundlerInBrowser, opts: InstallVuePluginOptions = {}) {
   const vendorPlugin: esbuild.Plugin = {
     name: "vue-loader-vendor",
     setup(build) {

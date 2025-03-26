@@ -1,4 +1,5 @@
 import type { BundlerInBrowser } from './BundlerInBrowser.js';
+import type { InstallVuePluginOptions } from './plugins/vue.js';
 
 export { BundlerInBrowser } from './BundlerInBrowser.js';
 export { MiniNPM } from './MiniNPM.js';
@@ -12,6 +13,6 @@ export async function installSassPlugin(bundler: BundlerInBrowser) {
 }
 
 /** add vue support. requires `vue@^3.2.14` installed */
-export async function installVuePlugin(...args: Parameters<typeof import('./plugins/vue.js').default>) {
-  (await import('./plugins/vue.js')).default(...args);
+export async function installVuePlugin(bundler: BundlerInBrowser, opts?: InstallVuePluginOptions) {
+  (await import('./plugins/vue.js')).default(bundler, opts);
 }

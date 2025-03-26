@@ -1,5 +1,3 @@
-import './dirty-stuff/monkey-patch.js';
-
 import esbuild from "esbuild-wasm";
 import { create as createResolver } from 'enhanced-resolve'
 import { MiniNPM } from "./MiniNPM.js";

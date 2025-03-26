@@ -12,7 +12,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      'path': 'path-browserify',
+      'path': require.resolve('./src/dirty-stuff/path.cjs'),
       'stream': 'streamx',
       'fs': require.resolve('./src/dirty-stuff/empty-object.cjs'),
       'graceful-fs': require.resolve('./src/dirty-stuff/empty-object.cjs'),
