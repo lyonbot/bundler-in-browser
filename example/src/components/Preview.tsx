@@ -10,6 +10,7 @@ interface PreviewProps {
 
 const NPMProgressView = memo(() => {
   const compilerService = useCompilerService();
+  const isCompilerReady = useAtomValue(compilerService.isReadyAtom);
   const isCompiling = useAtomValue(compilerService.isCompilingAtom);
   const npmProgress = useAtomValue(compilerService.npmInstallProgressAtom);
   if (!isCompiling) return null;
@@ -17,7 +18,9 @@ const NPMProgressView = memo(() => {
   return (
     <div className={styles.progressContainer}>
       {
-        npmProgress ? <>
+        (!isCompilerReady) ? <>
+          <div className={styles.packageId}>Loading Builder-In-Browser...</div>
+        </> : npmProgress ? <>
           <div className={styles.stage}>[{npmProgress.stage}]</div>
           <div className={styles.packageId}>{npmProgress.packageId}</div>
           <div className={styles.progress}>

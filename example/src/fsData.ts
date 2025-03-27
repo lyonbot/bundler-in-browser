@@ -11,6 +11,9 @@ createApp(App).mount(el);
 
 setInterval(() => { confetti() }, 3000);
 confetti();
+
+// uncomment to test React + CodeMirror + module-css
+// import './index-codemirror';
 `,
   "/App.vue": `
 <template>
@@ -70,29 +73,36 @@ h1 {
   "/vue.svg": `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 261.76 226.69"><path d="M161.096.001l-30.225 52.351L100.647.001H-.005l130.877 226.688L261.749.001z" fill="#41b883"/><path d="M161.096.001l-30.225 52.351L100.647.001H52.346l78.526 136.01L209.398.001z" fill="#34495e"/></svg>
 `,
-  "/index2.js": `
-import "github-markdown-css/github-markdown-dark.css";
-import * as S from "./base.module.scss";
-console.log(S);
-
+  "/index-codemirror.js": `
+// ------- React -------
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import SqlEditor from './sqlEditor.jsx';
 
 const container = document.createElement('div');
 document.body.appendChild(container);
 const root = createRoot(container);
 
-import("./dynamic1.js").then(d => { console.log('dayjs=',d) })
-
-import SqlEditor from './sqlEditor.jsx';
 root.render(React.createElement(SqlEditor));
+
+// ------- Dynamic Import ------
+import("./tst-dynamic.js").then(d => { console.log('dayjs=', d) })
+
+// ------- CSS ------
+import "github-markdown-css/github-markdown-dark.css";
+import * as S from "./tst-base.module.scss";
+
+const text = document.createElement('div');
+text.innerText = 'hello world';
+text.className = S.hello;
+document.body.appendChild(text);
   `,
-  "/base.module.scss": `
+  "/tst-base.module.scss": `
 .hello {
   color: red;
 }
   `,
-  "/dynamic1.js": `
+  "/tst-dynamic.js": `
 import dayjs from "dayjs";
 export { dayjs }
   `,
@@ -110,7 +120,6 @@ const SQLEditor = () => {
   }, []);
 
   const handleExecute = () => {
-    // 这里可以添加执行SQL的逻辑
     console.log('Executing SQL:', code);
   };
 
@@ -124,7 +133,7 @@ const SQLEditor = () => {
         onChange={handleChange}
         className="mb-4 border border-gray-300 rounded"
       />
-      <button onClick={handleExecute}>执行SQL</button>
+      <button onClick={handleExecute}>Execute SQL</button>
     </div>
   );
 };

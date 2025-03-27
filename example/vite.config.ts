@@ -9,6 +9,10 @@ export default defineConfig({
   base: './',
   define: {
     'process.env.NODE_ENV': '"development"',
+    'process.platform': '"browser"',
+  },
+  worker: {
+    format: 'es',
   },
   resolve: {
     alias: {
