@@ -22,6 +22,13 @@ confetti();
     <p>Counter: {{ count }}</p>
     <button @click="increment">Increment</button>
   </div>
+  <p class="footer">
+    built with 
+    <a href="https://github.com/lyonbot/bundler-in-browser" target="_blank">
+      📦 
+      bundler-in-browser
+    </a>
+  </p>
 </template>
 
 <script setup>
@@ -35,6 +42,7 @@ const hue = computed(() => (count.value * 40) % 360);
 h1 {
   text-align: center;
   color: hsla(v-bind(hue), 100%, 37%, 1);
+  margin-top: 2em;
 }
 
 .card {
@@ -44,6 +52,18 @@ h1 {
   border-radius: 16px;
   max-width: 600px;
   margin: auto;
+  margin-top: 4em;
+}
+
+.footer {
+  margin-top: 4em;
+  text-align: center;
+  color: #333;
+
+  a {
+    color: #30a;
+    text-decoration-style: dashed;
+  }
 }
 </style>
 `,

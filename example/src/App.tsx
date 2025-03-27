@@ -7,6 +7,8 @@ import { OutputPanel } from "./components/OutputPanel";
 import { FileSystemContext } from "./contexts/FileSystemContext";
 import CompileButton from "./components/CompileButton";
 
+import styles from "./styles/App.module.scss";
+
 interface Tab {
   path: string;
   content: string;
@@ -73,13 +75,7 @@ const App: React.FC = () => {
         overflow: "hidden",
       }}
     >
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          overflow: "hidden",
-        }}
-      >
+      <div className={styles.columns}>
         <ResizablePanel className="panel-left" initialWidth="200px">
           <div style={{ padding: 8, background: '#222', border: '1px solid #ccc' }}>
             <CompileButton />

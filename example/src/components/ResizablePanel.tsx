@@ -46,7 +46,6 @@ export const ResizablePanel: React.FC<ResizablePanelProps> = ({
       className={`${s.panel} ${className}`}
       style={{
         ...style,
-        width: `${width}`,
         flexBasis: width,
         position: "relative",
         overflow: "hidden",

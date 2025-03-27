@@ -1,0 +1,9 @@
+.columns {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+
+  @media (max-width: 768px) {
+    flex-direction: column-reverse;
+  }
+}
