@@ -1,15 +1,16 @@
 export const fsData = {
   "/index.js": `
-import confetti from "canvas-confetti";
-confetti();
-setInterval(() => { confetti() }, 3000);
-
 import { createApp } from 'vue';
+import confetti from "canvas-confetti";
+
 import App from './App.vue';
 
 const el = document.createElement('div');
 document.body.appendChild(el);
 createApp(App).mount(el);
+
+setInterval(() => { confetti() }, 3000);
+confetti();
 `,
   "/App.vue": `
 <template>
@@ -30,6 +31,9 @@ h1 {
   color: hsla(v-bind(hue), 100%, 37%, 1);
 }
 </style>
+`,
+  "/vue.svg": `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 261.76 226.69"><path d="M161.096.001l-30.225 52.351L100.647.001H-.005l130.877 226.688L261.749.001z" fill="#41b883"/><path d="M161.096.001l-30.225 52.351L100.647.001H52.346l78.526 136.01L209.398.001z" fill="#34495e"/></svg>
 `,
   "/index2.js": `
 import "github-markdown-css/github-markdown-dark.css";

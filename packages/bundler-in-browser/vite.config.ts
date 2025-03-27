@@ -4,6 +4,7 @@ import dts from 'vite-plugin-dts'
 
 import packageJSON from './package.json' assert { type: 'json' };
 const require = createRequire(import.meta.url);
+const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
 
 export default defineConfig({
   define: {
@@ -21,6 +22,7 @@ export default defineConfig({
   },
   plugins: [dts({ rollupTypes: true })],
   build: {
+    minify: !IS_DEVELOPMENT,
     rollupOptions: {
       external: [
         ...Object.keys(packageJSON.dependencies),

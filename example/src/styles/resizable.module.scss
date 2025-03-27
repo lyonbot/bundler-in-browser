@@ -1,0 +1,29 @@
+.resizer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 5px;
+  background: rgba(0, 0, 0, 0.1);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.resizer:hover,
+.resizer.isResizing {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.panel {
+  min-width: 100px;
+  max-width: 800px;
+  position: relative;
+}
+
+
+.panelContent {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}

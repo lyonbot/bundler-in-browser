@@ -5,31 +5,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>bundler-in-browser test</title>
+  <style>
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+  </style>
 </head>
 
 <body>
-  <pre id="compile-log"></pre>
-  <script type="module" src="./src/index.ts"></script>
-  <style>
-    #compile-log {
-      font-family: monospace;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      height: 60vh;
-      overflow: scroll;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      background-color: #f9f9f9;
-    }
-
-    #compile-log>div {
-      padding: 0.5em;
-    }
-
-    #compile-log>div:nth-child(even) {
-      background-color: #f0f0f0;
-    }
-  </style>
+  <div id="root"></div>
+  <script type="module" src="./src/main.tsx"></script>
 </body>
 
 </html>

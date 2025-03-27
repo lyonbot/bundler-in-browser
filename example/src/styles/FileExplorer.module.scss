@@ -1,0 +1,115 @@
+.container {
+  flex: 1 0 0;
+  border-right: 1px solid #e0e0e0;
+  background-color: #1e1e1e;
+  overflow: auto;
+  padding: 8px;
+  color: #fff;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+
+  h3 {
+    margin: 0;
+    font-size: 14px;
+    color: #fff;
+  }
+}
+
+.newButton {
+  background: none;
+  border: 1px solid #404040;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: #404040;
+  }
+}
+
+.newFileInput {
+  margin-bottom: 8px;
+  display: flex;
+  gap: 4px;
+
+  input {
+    background: #2d2d2d;
+    border: 1px solid #404040;
+    color: #fff;
+    padding: 4px;
+    border-radius: 4px;
+    flex: 1;
+
+    &:focus {
+      outline: none;
+      border-color: #007acc;
+    }
+  }
+}
+
+.fileList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fileItem {
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+
+  &:hover {
+    background-color: #2d2d2d;
+  }
+
+  &.active {
+    background-color: #404040;
+  }
+
+  &.open {
+    background-color: #2d2d2d;
+  }
+
+  .deleteButton {
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    padding: 2px 6px;
+    opacity: 0;
+    transition: opacity 0.2s;
+
+    &:hover {
+      color: #ff4444;
+    }
+  }
+
+  &:hover .deleteButton {
+    opacity: 1;
+  }
+}
+
+.entryTag {
+  background-color: #007acc;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  margin-left: 8px;
+}
+
+.filePathText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}

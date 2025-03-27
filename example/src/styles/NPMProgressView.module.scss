@@ -1,0 +1,104 @@
+.progressContainer {
+  padding: 16px;
+  background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  min-width: 240px;
+
+  @keyframes pulse {
+    0% {
+      opacity: 0.6;
+    }
+
+    50% {
+      opacity: 1;
+    }
+
+    100% {
+      opacity: 0.6;
+    }
+  }
+}
+
+.stage {
+  color: #888;
+  margin-right: 8px;
+  font-size: 12px;
+}
+
+.packageId {
+  font-weight: 600;
+  color: #4a9eff;
+  font-size: 14px;
+}
+
+.progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #aaa;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+.errorContainer {
+  padding: 16px;
+  background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  min-width: 240px;
+  max-width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  font-family: monospace;
+}
+
+.errorList {
+  margin: 0;
+  margin-left: 1em;
+  padding: 0;
+}
+
+.errorItem {
+  margin-bottom: 12px;
+  padding: 8px;
+  background: rgba(255, 0, 0, 0.1);
+  border-radius: 4px;
+  border-left: 3px solid #ff4444;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.errorMessage {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 4px;
+  white-space: pre-wrap;
+}
+
+.errorLocation {
+  font-size: 12px;
+  color: #888;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
