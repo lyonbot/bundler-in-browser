@@ -1,9 +1,9 @@
 import path from "path";
 import TarStream from 'tar-stream';
-import type { IFs } from "memfs";
 import { makeParallelTaskMgr, memoAsync, toPairs } from "./utils.js";
 import semver from "semver";
 import { EventEmitter } from "./EventEmitter.js";
+import type { BundlerInBrowser } from "./BundlerInBrowser.js";
 
 export namespace MiniNPM {
   export interface Options {
@@ -58,7 +58,7 @@ export namespace MiniNPM {
  * it heavily relies on `symlinks`. don't forget to enable `symlinks` in your resolve plugin.
  */
 export class MiniNPM {
-  public fs: IFs;
+  public fs: BundlerInBrowser.IFs;
   public options: Required<MiniNPM.Options>;
   public index: Record<string, MiniNPM.PkgIndex[]> = {};
 
@@ -72,7 +72,7 @@ export class MiniNPM {
 
   ROOT = 'ROOT';
 
-  constructor(fs: IFs, options: MiniNPM.Options = {}) {
+  constructor(fs: BundlerInBrowser.IFs, options: MiniNPM.Options = {}) {
     this.fs = fs;
     this.options = {
       registryUrl: 'https://registry.npmjs.org',
@@ -253,28 +253,19 @@ export class MiniNPM {
 
   async readLockFile() {
     const lockFilePath = this.getLockFilePath();
-    return new Promise<MiniNPM.LockFile | null>((resolve) => {
-      this.fs.readFile(lockFilePath, 'utf8', (err, data) => {
-        if (err) return resolve(null);
-
-        try {
-          const out = JSON.parse(data as string) as MiniNPM.LockFile;
-          resolve(out);
-        } catch (e) {
-          resolve(null);
-        }
-      });
-    });
+    try {
+      const data = this.fs.readFileSync(lockFilePath, 'utf8');
+      if (!data) return null;
+      const lockfile = JSON.parse(data as string) as MiniNPM.LockFile;
+      return lockfile;
+    } catch (e) {
+      return null;
+    }
   }
 
   async writeLockFile(lockFile: MiniNPM.LockFile) {
     const lockFilePath = this.getLockFilePath();
-    return new Promise<void>((resolve) => {
-      this.fs.writeFile(lockFilePath, JSON.stringify(lockFile, null, 2), () => {
-        // if (err) return reject(err);
-        resolve();
-      });
-    });
+    this.fs.writeFileSync(lockFilePath, JSON.stringify(lockFile, null, 2));
   }
 
   /**
@@ -471,7 +462,12 @@ export class MiniNPM {
       const fileName = header.name.replace(/^package\//, destDir);
 
       if (fileName.endsWith('/')) {
-        fs.mkdir(fileName, { recursive: true }, next);
+        try {
+          fs.mkdirSync(fileName, { recursive: true });
+          next();
+        } catch (err) {
+          next(err);
+        }
         return;
       }
 

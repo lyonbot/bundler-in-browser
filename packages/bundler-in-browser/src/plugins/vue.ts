@@ -216,7 +216,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         const fs = bundler.fs;
         const filename = args.path;
         const encPath = args.path.replace(/\\/g, "\\\\");
-        const code = await fs.promises.readFile(filename, 'utf8') as string;
+        const code = fs.readFileSync(filename, 'utf8') as string;
 
         const id = stringHash(filename).toString(36);
         const { errors, descriptor } = compiler.parse(code, {

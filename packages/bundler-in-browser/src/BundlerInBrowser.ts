@@ -4,8 +4,6 @@ import { MiniNPM } from "./MiniNPM.js";
 import { wrapCommonJS, pathToNpmPackage, makeParallelTaskMgr, escapeRegExp, cloneDeep } from './utils.js';
 import { EventEmitter } from "./EventEmitter.js";
 
-import type { IFs } from "memfs";
-
 const setToSortedArray = (set: Set<string>) => Array.from(set).sort()
 
 export namespace BundlerInBrowser {
@@ -57,22 +55,38 @@ export namespace BundlerInBrowser {
      */
     umdGlobalRequire?: string;
   }
+
+  export interface Events {
+    'initialized': () => void;
+    'compile:start': () => void;
+    'compile:usercode': (result: { npmRequired: Set<string>, vendorExports: Set<string>, external: Set<string> }) => void;
+    'compile:vendor': (result: BundlerInBrowser.VendorBundleResult) => void;
+    'npm:progress': (event: MiniNPM.ProgressEvent) => void;
+    'npm:packagejson:update': (newPackageJson: any) => void;
+    'npm:install:done': () => void;
+  }
+
+  export interface IFs {
+    existsSync(path: string): boolean;
+    readFileSync(path: string, encoding?: 'utf-8' | string): string | Uint8Array;
+    writeFileSync(path: string, data: string | Uint8Array): void;
+    mkdirSync(path: string, opts?: { recursive?: boolean }): any;
+    symlinkSync(target: string, path: string): void;
+    realpathSync(path: string, opts?: string | { encoding?: string }): any;
+    unlinkSync(path: string): void;
+    rmSync(path: string, opts?: { recursive?: boolean, force?: boolean }): void;
+  }
 }
 
-export interface BundlerInBrowserEvents {
-  'initialized': () => void;
-  'compile:start': () => void;
-  'compile:usercode': (result: { npmRequired: Set<string>, vendorExports: Set<string>, external: Set<string> }) => void;
-  'compile:vendor': (result: BundlerInBrowser.VendorBundleResult) => void;
-  'npm:progress': (event: MiniNPM.ProgressEvent) => void;
-  'npm:packagejson:update': (newPackageJson: any) => void;
-  'npm:install:done': () => void;
-}
+export type MaybePromise<T> = T | Promise<T>;
+
+/** alias of `BundlerInBrowser.Events` */
+export type BundlerInBrowserEvents = BundlerInBrowser.Events;
 
 export class BundlerInBrowser {
-  public readonly fs: IFs;
+  public readonly fs: BundlerInBrowser.IFs;
 
-  public events = new EventEmitter<BundlerInBrowserEvents>();
+  public events = new EventEmitter<BundlerInBrowser.Events>();
 
   initialized: Promise<void> | false = false;
   private async assertInitialized() {
@@ -96,7 +110,7 @@ export class BundlerInBrowser {
   public vendorPlugins: esbuild.Plugin[] = [] // only for vendor code
   public commonPlugins: esbuild.Plugin[] = [] // works for both user and vendor, will be appended to user plugins
 
-  constructor(fs: IFs) {
+  constructor(fs: BundlerInBrowser.IFs) {
     this.fs = fs;
     this.npm = new MiniNPM(fs, {
       useJSDelivrToQueryVersions: false,
@@ -267,7 +281,7 @@ export class BundlerInBrowser {
     try {
       const path = '/package.json'
       if (this.fs.existsSync(path)) {
-        const data = await this.fs.promises.readFile(path, 'utf8').then(data => JSON.parse(data as string));
+        const data = JSON.parse(this.fs.readFileSync(path, 'utf8') as string);
         Object.assign(rootPackageJson, data);
         if (!rootPackageJson.dependencies) rootPackageJson.dependencies = {};
       }
@@ -291,7 +305,7 @@ export class BundlerInBrowser {
 
     // write package.json
     this.events.emit('npm:packagejson:update', rootPackageJson);
-    await this.fs.promises.writeFile('/package.json', JSON.stringify(rootPackageJson, null, 2));
+    this.fs.writeFileSync('/package.json', JSON.stringify(rootPackageJson, null, 2));
 
     await this.npm.install(rootPackageJson.dependencies);
     this.events.emit('npm:install:done');

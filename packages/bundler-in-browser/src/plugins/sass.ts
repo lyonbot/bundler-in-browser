@@ -9,7 +9,7 @@ export default function installSassPlugin(bundler: BundlerInBrowser) {
       build.onLoad({ filter: /.scss$/ }, async (args) => {
         const fs = bundler.fs;
         let fullPath = args.path;
-        let contents = await fs.promises.readFile(fullPath, 'utf8') as string;
+        let contents = fs.readFileSync(fullPath, 'utf8') as string;
         let result = await sass.compileStringAsync(contents, {
           style: 'expanded'
         });
