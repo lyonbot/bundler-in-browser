@@ -15,8 +15,13 @@ confetti();
   "/App.vue": `
 <template>
   <h1>BundlerInBrowser! Works!</h1>
-  <p>Counter: {{ count }}</p>
-  <button @click="increment">Increment</button>
+  <div class="card">
+    <p>
+      <img src="./vue.svg" alt="Vue logo" width="100" height="100">
+    </p>
+    <p>Counter: {{ count }}</p>
+    <button @click="increment">Increment</button>
+  </div>
 </template>
 
 <script setup>
@@ -28,7 +33,17 @@ const hue = computed(() => (count.value * 40) % 360);
 
 <style scoped>
 h1 {
+  text-align: center;
   color: hsla(v-bind(hue), 100%, 37%, 1);
+}
+
+.card {
+  text-align: center;
+  border: 1px solid #ccc;
+  padding: 16px;
+  border-radius: 16px;
+  max-width: 600px;
+  margin: auto;
 }
 </style>
 `,

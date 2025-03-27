@@ -7,7 +7,7 @@ import { memoAsync } from '../utils.js';
 
 const COMP_IDENTIFIER = '__vue_component__';
 function getFullPath(args: esbuild.OnResolveArgs) {
-  return path.isAbsolute(args.path) ? args.path : path.join(args.resolveDir, args.path);
+  return path.isAbsolute(args.path) ? args.path : path.join(args.resolveDir || path.dirname(args.importer), args.path);
 }
 
 function getUrlParams(search: string): Record<string, string> {

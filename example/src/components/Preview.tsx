@@ -25,6 +25,9 @@ const NPMProgressView = memo(() => {
           </div>
         </> : <>
           <div className={styles.packageId}>Compile and bundling...</div>
+          <div className={styles.progress}>
+            if NPM dependencies changed, it'll take a while
+          </div>
         </>
       }
     </div>

@@ -3,6 +3,7 @@ import { create as createResolver } from 'enhanced-resolve'
 import { MiniNPM } from "./MiniNPM.js";
 import { wrapCommonJS, pathToNpmPackage, makeParallelTaskMgr, escapeRegExp, cloneDeep } from './utils.js';
 import { EventEmitter } from "./EventEmitter.js";
+import { dirname } from "path";
 
 const setToSortedArray = (set: Set<string>) => Array.from(set).sort()
 
@@ -138,7 +139,7 @@ export class BundlerInBrowser {
             if (/^(https?:)\/\/|^data:/.test(fullPath)) return { external: true, path: fullPath }; // URL is external
 
             return await new Promise((done, reject) => {
-              resolve(args.resolveDir, fullPath, (err, res) => {
+              resolve(args.resolveDir || dirname(args.importer), fullPath, (err, res) => {
                 if (err) return reject(err);
                 if (!res) return reject(new Error(`Cannot resolve ${fullPath}`));
 
@@ -168,6 +169,13 @@ export class BundlerInBrowser {
             return {
               contents: fs.readFileSync(fullPath),
               loader
+            }
+          })
+
+          build.onLoad({ filter: /\.(png|jpe?g|gif|svg|webp)$/ }, async (args) => {
+            return {
+              contents: fs.readFileSync(args.path),
+              loader: 'dataurl'
             }
           })
         },
