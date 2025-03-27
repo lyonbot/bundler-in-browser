@@ -8,14 +8,20 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "@types/react": "^19.0.12",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
     "assert": "^2.1.0",
     "buffer": "^6.0.3",
     "bundler-in-browser": "workspace:*",
     "dayjs": "^1.11.13",
     "esbuild-wasm": "^0.25.1",
-    "memfs": "^4.9.3",
+    "memfs": "^4.17.0",
     "path-browserify": "^1.0.1",
     "process": "^0.11.10",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "streamx": "^2.22.0",
     "url": "^0.11.4",
     "util": "^0.12.5"

@@ -30,6 +30,7 @@ async function main() {
   compiler.events.on('initialized', () => log('initialized'));
   compiler.events.on('npm:progress', (e) => log(`[npm] [${e.stage}] [${e.current} / ${e.total}] ${e.packageId}`));
   compiler.events.on('npm:install:done', () => log(`[npm] install:done`));
+  compiler.events.on('npm:install:error', (e) => log(`[npm] install:error`, e.errors));
 
   compiler.events.on('compile:start', () => log('compile:start'));
   compiler.events.on('compile:usercode', (result) => log('compile:usercode', result));
@@ -44,11 +45,12 @@ async function main() {
   await installVuePlugin(compiler, { enableProdDevTools: true });
 
   const out = await compiler.compile()
-    .catch((err: Error & { errors?: PartialMessage[] }) => {
+    .catch((err: Error & { errors?: (PartialMessage | Error)[] }) => {
       console.error('Compile error:', err.errors);
       log('❌ Compile error. ' + err.message);
       err.errors?.forEach((e, i) => {
-        log(`(${i + 1}) ${e.text}\n${e.location?.file}:${e.location?.line}:${e.location?.column}`);
+        let msg = e instanceof Error ? e.message : `${e.text}\n${e.location?.file}:${e.location?.line}:${e.location?.column}`;
+        log(`(${i + 1}) ${msg}`);
       });
       throw err
     })

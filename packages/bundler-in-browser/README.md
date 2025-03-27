@@ -18,6 +18,7 @@ A powerful in-browser bundler that automatically installs npm packages, powered 
 npm install bundler-in-browser
 
 # Optional but recommended for virtual filesystem support
+# or you can implement the `BundlerInBrowser.IFs` interface
 npm install memfs
 ```
 
