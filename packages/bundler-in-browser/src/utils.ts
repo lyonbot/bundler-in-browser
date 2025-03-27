@@ -27,6 +27,13 @@ export function pathToNpmPackage(fullPath: string): [packageName: string, import
   return [packageName, importedPath];
 }
 
+export class ParallelTasksError extends Error {
+  constructor(public errors: any[]) {
+    const message = errors.length > 1 ? `Parallel tasks met ${errors.length} errors` : errors[0]?.message;
+    super(message || 'Parallel task error', { cause: errors });
+  }
+}
+
 /**
  * make a parallel task manager
  * 
@@ -38,6 +45,7 @@ export function makeParallelTaskMgr() {
   let maxConcurrency = 0;
   let currentCurrency = 0;
   let onLastWorkerExit: undefined | (() => void);  // undefined means not running
+  let errors: any[] = [];
 
   function fillUpWorker() {
     while (currentCurrency < maxConcurrency && queue.length) {
@@ -47,7 +55,7 @@ export function makeParallelTaskMgr() {
           let fn = queue.shift();
           if (!fn) break;
 
-          await Promise.resolve().then(fn).catch(e => console.error(e));
+          await Promise.resolve().then(fn).catch(e => errors.push(e));
         }
 
         currentCurrency--;
@@ -64,10 +72,14 @@ export function makeParallelTaskMgr() {
     if (onLastWorkerExit) throw new Error("Already running");
     maxConcurrency = concurrency;
 
-    const promise = new Promise<void>(resolve => {
+    const promise = new Promise<void>((resolve, reject) => {
       onLastWorkerExit = () => {
         onLastWorkerExit = undefined;
-        resolve();
+        if (errors.length) {
+          reject(new ParallelTasksError(errors));
+        } else {
+          resolve();
+        }
       };
     });
 
@@ -134,4 +146,15 @@ export function memoAsync<A extends any[], T>(fn: (...args: A) => Promise<T>, ke
   }
 
   return memoFn;
+}
+
+/**
+ * add prefix to error message, and throw it
+ */
+export function rethrowWithPrefix(e: any, prefix: string): never {
+  if (e instanceof Error) {
+    e.message = `${prefix}: ${e.message}`;
+    throw e;
+  }
+  throw new Error(`${prefix}: ${e?.message ?? e?.text ?? e}`, { cause: e });
 }

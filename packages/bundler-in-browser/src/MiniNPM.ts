@@ -1,6 +1,6 @@
 import path from "path";
 import TarStream from 'tar-stream';
-import { makeParallelTaskMgr, memoAsync, toPairs } from "./utils.js";
+import { rethrowWithPrefix, makeParallelTaskMgr, memoAsync, toPairs } from "./utils.js";
 import semver from "semver";
 import { EventEmitter } from "./EventEmitter.js";
 import type { BundlerInBrowser } from "./BundlerInBrowser.js";
@@ -325,7 +325,9 @@ export class MiniNPM {
         if (!reusedInstalledIds.has(dep.id)) {
           // new package, need to download
           // (note: in previous progress, existing packages' node_modules was cleaned up)
-          await this.pourTarball(dep.dist.tarball, directory);
+          await this.pourTarball(dep.dist.tarball, directory).catch((err) => {
+            rethrowWithPrefix(err, `cannot pour tarball of ${dep.name}@${dep.version}`);
+          });
         }
 
         // then make links to its dependents
@@ -408,24 +410,36 @@ export class MiniNPM {
   }
 
   getPackageVersionsWithJSDelivr = memoAsync(async (packageName: string) => {
-    const url = `https://data.jsdelivr.com/v1/package/npm/${packageName}`
-    const res = await fetch(url).then(x => x.json());
+    try {
+      const url = `https://data.jsdelivr.com/v1/package/npm/${packageName}`
+      const res = await fetch(url).then(x => x.json())
+      const versions = (res.versions || []) as string[];
+      if (!versions.length) throw new Error(`No versions`);
 
-    return {
-      versions: (res.versions || []) as string[],
-      tags: (res.tags || {}) as Record<string, string>,
+      return {
+        versions: versions,
+        tags: (res.tags || {}) as Record<string, string>,
+      }
+    } catch (e) {
+      rethrowWithPrefix(e, `Cannot fetch versions of "${packageName}" via jsdelivr`);
     }
   })
 
   getPackageVersionsWithRegistry = memoAsync(async (packageName: string) => {
     // https://registry.npmjs.org/react/
-    const packageUrl = `${this.options.registryUrl}/${packageName}/`;
-    const registryInfo = await fetch(packageUrl).then(x => x.json());
-    const versions = Object.keys(registryInfo.versions);
+    try {
+      const packageUrl = `${this.options.registryUrl}/${packageName}/`;
+      const registryInfo = await fetch(packageUrl).then(x => x.json())
+      if (!registryInfo.versions) throw new Error(`No versions`);
 
-    return {
-      versions,
-      tags: (registryInfo['dist-tags'] || {}) as Record<string, string>,
+      const versions = Object.keys(registryInfo.versions);
+
+      return {
+        versions,
+        tags: (registryInfo['dist-tags'] || {}) as Record<string, string>,
+      }
+    } catch (e) {
+      rethrowWithPrefix(e, `Cannot fetch versions of "${packageName}" via registry`);
     }
   })
 

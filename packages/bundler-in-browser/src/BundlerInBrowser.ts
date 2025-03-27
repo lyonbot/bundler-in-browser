@@ -64,6 +64,7 @@ export namespace BundlerInBrowser {
     'npm:progress': (event: MiniNPM.ProgressEvent) => void;
     'npm:packagejson:update': (newPackageJson: any) => void;
     'npm:install:done': () => void;
+    'npm:install:error': (ev: { errors: Error[] }) => void;
   }
 
   export interface IFs {
@@ -307,8 +308,13 @@ export class BundlerInBrowser {
     this.events.emit('npm:packagejson:update', rootPackageJson);
     this.fs.writeFileSync('/package.json', JSON.stringify(rootPackageJson, null, 2));
 
-    await this.npm.install(rootPackageJson.dependencies);
-    this.events.emit('npm:install:done');
+    try {
+      await this.npm.install(rootPackageJson.dependencies);
+      this.events.emit('npm:install:done');
+    } catch (err: any) {
+      this.events.emit('npm:install:error', { errors: err.errors || [err] });
+      throw err;
+    }
 
     // create a new bundle
     const vendor: BundlerInBrowser.VendorBundleResult = {
