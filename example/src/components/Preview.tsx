@@ -13,14 +13,17 @@ const NPMProgressView = memo(() => {
   const isCompilerReady = useAtomValue(compilerService.isReadyAtom);
   const isCompiling = useAtomValue(compilerService.isCompilingAtom);
   const npmProgress = useAtomValue(compilerService.npmInstallProgressAtom);
-  if (!isCompiling) return null;
 
-  return (
-    <div className={styles.progressContainer}>
+  if (!isCompilerReady) {
+    return <div className={styles.progressContainer}>
+      <div className={styles.packageId}>Loading Builder-In-Browser...</div>
+    </div>
+  }
+
+  if (isCompiling) {
+    return <div className={styles.progressContainer}>
       {
-        (!isCompilerReady) ? <>
-          <div className={styles.packageId}>Loading Builder-In-Browser...</div>
-        </> : npmProgress ? <>
+        npmProgress ? <>
           <div className={styles.stage}>[{npmProgress.stage}]</div>
           <div className={styles.packageId}>{npmProgress.packageId}</div>
           <div className={styles.progress}>
@@ -34,7 +37,9 @@ const NPMProgressView = memo(() => {
         </>
       }
     </div>
-  )
+  }
+
+  return null
 })
 
 const CompileErrorView = memo((props: Pick<PreviewProps, 'onFileSelect'>) => {

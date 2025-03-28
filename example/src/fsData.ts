@@ -13,7 +13,7 @@ createApp(App).mount(el);
 setInterval(() => { confetti() }, 3000);
 confetti();
 
-// uncomment to test React + CodeMirror + module-css
+// uncomment to test React + CodeMirror + module-css + TailwindCSS
 // import './react/index';
 `,
   "/src/tailwind.css": `

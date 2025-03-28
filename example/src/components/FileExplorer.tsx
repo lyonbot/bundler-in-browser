@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { memo, useContext, useState } from "react";
 import { FileSystemContext } from "../contexts/FileSystemContext";
 import styles from "../styles/FileExplorer.module.scss";
 import { clsx } from "yon-utils";
@@ -97,7 +97,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
               })}
               title={path}
             >
-              <span className={styles.filePathText} title={path}>{path}</span>
+              <FilePath path={path} />
               {path === '/src/index.js' && <span className={styles.entryTag}>entry</span>}
               <div style={{ flex: '1' }}></div>
               <button
@@ -113,3 +113,14 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     </div>
   );
 };
+
+const FilePath = memo((props: { path: string }) => {
+  const pos = props.path.lastIndexOf('/') + 1
+  const fileName = props.path.slice(pos)
+  const dirPath = props.path.slice(0, pos)
+
+  return <span className={styles.filePathText} title={props.path}>
+    <span className={styles.dirPathText} title={dirPath}>{dirPath}</span>
+    <span className={styles.fileNameText}>{fileName}</span>
+  </span>
+})

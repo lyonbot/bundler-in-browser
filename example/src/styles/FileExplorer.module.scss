@@ -87,6 +87,8 @@
     padding: 2px 6px;
     opacity: 0;
     transition: opacity 0.2s;
+    max-width: 0;
+    overflow: hidden;
 
     &:hover {
       color: #ff4444;
@@ -95,6 +97,7 @@
 
   &:hover .deleteButton {
     opacity: 1;
+    max-width: 100px;
   }
 }
 
@@ -112,4 +115,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+.dirPathText {
+  opacity: 0.6;
+  font-size: 86%;
 }
