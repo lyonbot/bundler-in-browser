@@ -70,7 +70,7 @@ export namespace BundlerInBrowser {
 
   export interface IFs {
     existsSync(path: string): boolean;
-    readFileSync(path: string, encoding?: 'utf-8' | string): string | Uint8Array;
+    readFileSync(path: string, encoding?: 'utf-8' | string | any): string | Uint8Array;
     writeFileSync(path: string, data: string | Uint8Array): void;
     mkdirSync(path: string, opts?: { recursive?: boolean }): any;
     symlinkSync(target: string, path: string): void;
