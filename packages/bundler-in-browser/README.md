@@ -8,7 +8,7 @@ A powerful in-browser bundler that automatically installs npm packages, powered 
 
 - 🚀 **Fast Bundling**: Powered by esbuild-wasm for high-performance bundling
 - 📦 **Auto NPM Install**: Automatically installs and bundles npm dependencies
-- 🔌 **Plugin System**: Support for Sass, Vue 3 SFC, and more
+- 🔌 **Plugin System**: Support for TailwindCSS, Sass, Vue 3 SFC, and more
 - 🗄️ **Vendor Caching**: Smart caching of vendor bundles for better performance
 - 🌐 **Browser-Native**: Runs entirely in the browser - no server required
 
@@ -87,6 +87,10 @@ The bundling process happens in three stages:
 The `compile()` method automatically runs all three stages. For more control, you can use `bundler.bundleUserCode()` to only run the first stage and inspect required dependencies.
 
 ## Plugins
+
+### TailwindCSS Support
+
+See [tailwindcss plugin](https://github.com/lyonbot/bundler-in-browser/tree/main/packages/tailwindcss) for more details.
 
 ### Sass Support
 
