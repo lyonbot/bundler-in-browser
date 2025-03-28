@@ -1,6 +1,6 @@
 {
   "name": "@bundler-in-browser/tailwindcss",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "tailwindcss plugin for bundler-in-browser",
   "homepage": "https://lyonbot.github.io/bundler-in-browser/",
   "publishConfig": {
@@ -49,8 +49,7 @@
   "peerDependencies": {
     "bundler-in-browser": "*"
   },
-  "dependencies": {
-  },
+  "dependencies": {},
   "devDependencies": {
     "@mhsdesign/jit-browser-tailwindcss": "^0.4.2",
     "autoprefixer": "^10.4.21",

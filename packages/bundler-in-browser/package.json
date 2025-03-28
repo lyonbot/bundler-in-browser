@@ -1,6 +1,6 @@
 {
   "name": "bundler-in-browser",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "a bundler in browser, auto install npm packages, powered by esbuild-wasm",
   "homepage": "https://lyonbot.github.io/bundler-in-browser/",
   "publishConfig": {
