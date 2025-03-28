@@ -24,7 +24,7 @@ function YourComponent() {
   
   const handleCompile = async () => {
     await service.compile({
-      '/index.js': 'console.log("Hello World")',
+      '/src/index.js': 'console.log("Hello World")',
       // ... more files
     });
   };

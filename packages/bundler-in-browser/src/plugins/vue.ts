@@ -4,6 +4,7 @@ import type { BundlerInBrowser } from "../BundlerInBrowser.js";
 import type esbuild from "esbuild-wasm";
 import path from "path";
 import { memoAsync } from '../utils.js';
+import { processCSS } from './common.js';
 
 const COMP_IDENTIFIER = '__vue_component__';
 function getFullPath(args: esbuild.OnResolveArgs) {
@@ -46,6 +47,8 @@ function getLineContent(code: string, offset: number) {
  * @returns 
  */
 function getLineText(source: string, line: number) {
+  if (!source || !(line >= 1)) return '';
+
   let lineStart = 0;
   let lineEnd = source.length;
 
@@ -155,21 +158,20 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         const errors = errorsAll.filter((e, i) => !(i === 0 && e.message.includes('pathToFileURL')));
         if (errors.length > 0) return {
           errors: errors.map((e: any): esbuild.PartialMessage => ({
-            text: 'style: ' + e.reason,
+            text: 'style: ' + (e.reason || e.message || e),
             location: {
               file: toESBuildErrorCtx.currentFile,
-              line: e.line - 1 + style.loc.start.line,
-              column: e.column - 1,
-              lineText: getLineText(e.source, e.line),
+              ...e.line >= 1 ? {
+                line: e.line - 1 + style.loc.start.line,
+                column: e.column - 1,
+                lineText: getLineText(e.source, e.line),
+              } : null
             }
           }))
         };
 
-        return {
-          contents: code,
-          loader: 'css',
-          pluginData: { ...args.pluginData }
-        }
+        // return { contents: code, loader: 'css', pluginData: { ...args.pluginData } }
+        return await processCSS(build, args.path, code)
       })
 
       build.onLoad({ filter: /./, namespace: "sfc-script" }, async (args) => {

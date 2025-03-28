@@ -127,8 +127,8 @@ export function makeParallelTaskMgr() {
  * eval(output); // "hello 42"
  * ```
  */
-export function wrapCommonJS(code: string, modules = '{exports:{}}') {
-  return `((modules => ((exports=>{${code}\n})(modules.exports), modules.exports))(${modules}))`
+export function wrapCommonJS(code: string, module = '{exports:{}}') {
+  return `((module => ((exports=>{${code}\n})(module.exports), module.exports))(${module}))`
 }
 
 /**

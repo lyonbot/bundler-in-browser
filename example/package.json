@@ -8,6 +8,7 @@
     "build": "vite build"
   },
   "dependencies": {
+"@bundler-in-browser/tailwindcss": "workspace:^0.1.0",
     "@monaco-editor/react": "^4.7.0",
     "@types/react": "^19.0.12",
     "@types/react-dom": "^19.0.4",

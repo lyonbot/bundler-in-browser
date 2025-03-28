@@ -4,6 +4,7 @@ import { MiniNPM } from "./MiniNPM.js";
 import { wrapCommonJS, pathToNpmPackage, makeParallelTaskMgr, escapeRegExp, cloneDeep } from './utils.js';
 import { EventEmitter } from "./EventEmitter.js";
 import { dirname } from "path";
+import { processCSS } from "./plugins/common.js";
 
 const setToSortedArray = (set: Set<string>) => Array.from(set).sort()
 
@@ -57,6 +58,11 @@ export namespace BundlerInBrowser {
      * @note you won't need this if `external` not set.
      */
     umdGlobalRequire?: string;
+
+    /**
+     * optional. applies to every css / sass / scss file.
+     */
+    postcssProcessor?: typeof import('postcss').Processor
   }
 
   export interface CompileUserCodeResult {
@@ -117,6 +123,7 @@ export namespace BundlerInBrowser {
     existsSync(path: string): boolean;
     readFileSync(path: string, encoding?: 'utf-8' | string | any): string | Uint8Array;
     writeFileSync(path: string, data: string | Uint8Array): void;
+    readdirSync(path: string): string[];
     mkdirSync(path: string, opts?: { recursive?: boolean }): any;
     symlinkSync(target: string, path: string): void;
     realpathSync(path: string, opts?: string | { encoding?: string }): any;
@@ -148,7 +155,7 @@ export class BundlerInBrowser {
     await this.initialized;
   }
 
-  public userCodePlugins: esbuild.Plugin[] = [] // only for user code
+  public userCodePlugins: (esbuild.Plugin | ((opts: BundlerInBrowser.CompileUserCodeOptions) => (esbuild.Plugin | null)))[] = [] // only for user code
   public vendorPlugins: esbuild.Plugin[] = [] // only for vendor code
   public commonPlugins: esbuild.Plugin[] = [] // works for both user and vendor, will be appended to user plugins
 
@@ -204,7 +211,9 @@ export class BundlerInBrowser {
             else if (suffix === 'txt') loader = 'text';
             else if (suffix === 'cjs' || suffix === 'mjs') loader = 'js';
 
-            if (loader === 'css' && fullPath.endsWith('.module.css')) loader = 'local-css';
+            if (loader === 'css') {
+              return await processCSS(build, fullPath, fs.readFileSync(fullPath, 'utf8') as string)
+            }
 
             return {
               contents: fs.readFileSync(fullPath),
@@ -267,6 +276,12 @@ export class BundlerInBrowser {
       })
     }
 
+    const userCodePlugins: esbuild.Plugin[] = []
+    for (let plugin of this.userCodePlugins) {
+      const p = typeof plugin === 'function' ? plugin(opts) : plugin;
+      if (p) userCodePlugins.push(p);
+    }
+
     const output = await esbuild.build({
       entryPoints: [opts.entrypoint || "/index.js"],
       bundle: true,
@@ -278,7 +293,7 @@ export class BundlerInBrowser {
       minify: !!opts.minify,
       plugins: [
         externalCollect.plugin,
-        ...this.userCodePlugins,
+        ...userCodePlugins,
         npmCollectPlugin(), // after user plugins, before common plugins
         ...this.commonPlugins,
       ],

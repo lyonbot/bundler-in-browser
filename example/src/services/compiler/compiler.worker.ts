@@ -7,6 +7,7 @@ import {
   installVuePlugin,
   wrapCommonJS,
 } from "bundler-in-browser";
+import installTailwindPlugin from "@bundler-in-browser/tailwindcss";
 import type { PartialMessage } from "esbuild-wasm";
 import { fsData } from "../../fsData";
 import {
@@ -47,6 +48,14 @@ async function main() {
   });
   await installSassPlugin(bundler);
   await installVuePlugin(bundler, { enableProdDevTools: true });
+await installTailwindPlugin(bundler, {
+    tailwindConfig: "/tailwind.config.js",
+    // tailwindConfig: {
+    //   corePlugins: {
+    //     preflight: false,  // remove Tailwind's reset
+    //   }
+    // }
+  });
 
   // ready to compile
   self.addEventListener("message", async ({ data }) => {
@@ -54,7 +63,9 @@ async function main() {
     fs.fromJSON(data.files);
 
     await bundler
-      .compile()
+      .compile({
+        entrypoint: '/src/index.js',
+      })
       .then((result) => {
         const message: CompilationSuccessResponse = {
           result,

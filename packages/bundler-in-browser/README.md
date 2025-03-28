@@ -32,7 +32,7 @@ import { Volume } from "memfs";
 
 // Create a virtual filesystem with your source code
 const fs = Volume.fromJSON({
-  "/index.js": `
+  "/src/index.js": `
     import confetti from "canvas-confetti";
 
     confetti();
@@ -52,7 +52,7 @@ await bundler.initialize();
 // Compile your code
 // it throws with { errors } if compilation failed
 const out = await bundler.compile({
-  entrypoint: "/index.js",
+  entrypoint: "/src/index.js",
 });
 
 // Execute the bundled code

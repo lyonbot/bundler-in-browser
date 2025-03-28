@@ -1,9 +1,10 @@
 export const fsData = {
-  "/index.js": `
+  "/src/index.js": `
 import { createApp } from 'vue';
 import confetti from "canvas-confetti";
 
 import App from './App.vue';
+import "./tailwind.css";
 
 const el = document.createElement('div');
 document.body.appendChild(el);
@@ -15,10 +16,25 @@ confetti();
 // uncomment to test React + CodeMirror + module-css
 // import './index-codemirror';
 `,
-  "/App.vue": `
+  "/src/tailwind.css": `
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+`,
+  "/tailwind.config.js": `
+module.exports = {
+  // "content" is ignored - managed by bundler-in-browser
+  // content: [ "./src/**/*.{vue,js,ts,jsx,tsx}" ],
+
+  corePlugins: {
+    preflight: false,  // remove Tailwind's reset
+  }
+}
+  `,
+  "/src/App.vue": `
 <template>
   <h1>BundlerInBrowser! Works!</h1>
-  <div class="card">
+  <div class="card bg-slate-200 shadow-lg">
     <p>
       <img src="./vue.svg" alt="Vue logo" width="100" height="100">
     </p>
@@ -62,18 +78,18 @@ h1 {
   margin-top: 4em;
   text-align: center;
   color: #333;
+}
 
-  a {
-    color: #30a;
-    text-decoration-style: dashed;
-  }
+.footer a {
+  color: #30a;
+  text-decoration-style: dashed;
 }
 </style>
 `,
-  "/vue.svg": `
+  "/src/vue.svg": `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 261.76 226.69"><path d="M161.096.001l-30.225 52.351L100.647.001H-.005l130.877 226.688L261.749.001z" fill="#41b883"/><path d="M161.096.001l-30.225 52.351L100.647.001H52.346l78.526 136.01L209.398.001z" fill="#34495e"/></svg>
 `,
-  "/index-codemirror.js": `
+  "/src/index-codemirror.js": `
 // ------- React -------
 import React from 'react';
 import { createRoot } from 'react-dom/client';
@@ -97,16 +113,16 @@ text.innerText = 'hello world';
 text.className = S.hello;
 document.body.appendChild(text);
   `,
-  "/tst-base.module.scss": `
+  "/src/tst-base.module.scss": `
 .hello {
   color: red;
 }
   `,
-  "/tst-dynamic.js": `
+  "/src/tst-dynamic.js": `
 import dayjs from "dayjs";
 export { dayjs }
   `,
-  "/sqlEditor.jsx": `
+  "/src/sqlEditor.jsx": `
 import React, { useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { sql } from '@codemirror/lang-sql';
@@ -140,6 +156,4 @@ const SQLEditor = () => {
 
 export default SQLEditor;
 `
-  // "/index.js": `import { hello } from "./hello.js";\n console.log(hello());`,
-  // "/hello.js": `import { v4 } from "uuid";\n export function hello() { return "hello " + v4(); }`,
 };

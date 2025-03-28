@@ -7,6 +7,9 @@ export { EventEmitter } from './EventEmitter.js';
 
 export { wrapCommonJS, makeParallelTaskMgr, ParallelTasksError, pathToNpmPackage } from './utils.js';
 
+import * as forPlugins from './plugins/common.js';
+export { forPlugins }
+
 /** add sass support. requires `sass` installed */
 export async function installSassPlugin(bundler: BundlerInBrowser) {
   (await import('./plugins/sass.js')).default(bundler);

@@ -1,6 +1,7 @@
 import * as sass from 'sass';
 import type { BundlerInBrowser } from "../BundlerInBrowser.js";
 import type esbuild from "esbuild-wasm";
+import { processCSS } from './common.js';
 
 export default function installSassPlugin(bundler: BundlerInBrowser) {
   const plugin: esbuild.Plugin = {
@@ -14,10 +15,8 @@ export default function installSassPlugin(bundler: BundlerInBrowser) {
           style: 'expanded'
         });
 
-        return {
-          contents: result.css,
-          loader: fullPath.endsWith('.module.scss') ? 'local-css' : 'css'
-        }
+        const css = result.css;
+        return await processCSS(build, fullPath, css)
       })
     }
   }

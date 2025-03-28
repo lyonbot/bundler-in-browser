@@ -98,7 +98,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
               title={path}
             >
               <span className={styles.filePathText} title={path}>{path}</span>
-              {path === '/index.js' && <span className={styles.entryTag}>entry</span>}
+              {path === '/src/index.js' && <span className={styles.entryTag}>entry</span>}
               <div style={{ flex: '1' }}></div>
               <button
                 onMouseDown={(e) => handleDeleteFile(path, e)}

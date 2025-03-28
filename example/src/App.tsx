@@ -14,7 +14,7 @@ interface Tab {
   content: string;
 }
 
-const entryPath = '/index.js'
+const entryPath = '/src/index.js'
 
 const App: React.FC = () => {
   const { files, updateFile } = useContext(FileSystemContext);
