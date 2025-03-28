@@ -19,7 +19,7 @@ export namespace BundlerInBrowser {
 
   export interface CompileUserCodeOptions {
     /** defaults to `/index.js` */
-    entrypoint?: string
+    entrypoint?: string;
 
     minify?: boolean;
 
@@ -27,11 +27,13 @@ export namespace BundlerInBrowser {
     define?: Record<string, string>;
 
     /** 
-     * all these deps will NOT be bundled.
+     * exclude dependencies from bundle.
      * 
      * - `"@foo/bar"` contains `@foo/bar/baz.js`
      * - you can use wildcards like `"*.png"`
      * - `/^vue$/` will NOT match `/vue/dist/vue.esm-bundler.js`
+     * 
+     * 
      */
     external?: (string | RegExp)[];
 
@@ -57,6 +59,49 @@ export namespace BundlerInBrowser {
     umdGlobalRequire?: string;
   }
 
+  export interface CompileUserCodeResult {
+    /** entry js file content, in CommonJS format */
+    js: string;
+
+    /** entry css file content */
+    css: string;
+
+    /** all npm package id, required by user code. eg `["vue", "lodash"]` */
+    npmRequired: Set<string>;
+
+    /** full vendor paths imported by user code, eg `["vue", "lodash/debounce"]` */
+    vendorExports: Set<string>;
+
+    /** all actual-used dependencies that declared in `external` (the compile options) */
+    external: Set<string>;
+
+    /** raw esbuild output */
+    esbuildOutput: esbuild.BuildResult;
+  }
+
+  export interface ConcatCodeResult {
+    /** entry content, in **UMD format**, containing user code and vendor code */
+    js: string;
+
+    /** entry css, containing vendor css + user css */
+    css: string;
+
+    /** all external dependencies, required by user code and vendor code */
+    external: Set<string>;
+  }
+
+  export type CompileResult
+    = ConcatCodeResult
+    & Pick<CompileUserCodeResult, 'npmRequired' | 'vendorExports'>
+    & {
+      /** 
+       * the used vendor bundle.
+       * 
+       * can be reloaded next time by `bundler.loadVendorBundle()`, to skip npm install & vendor bundling 
+       */
+      vendorBundle: VendorBundleResult;
+    }
+
   export interface Events {
     'initialized': () => void;
     'compile:start': () => void;
@@ -79,11 +124,6 @@ export namespace BundlerInBrowser {
     rmSync(path: string, opts?: { recursive?: boolean, force?: boolean }): void;
   }
 }
-
-export type MaybePromise<T> = T | Promise<T>;
-
-/** alias of `BundlerInBrowser.Events` */
-export type BundlerInBrowserEvents = BundlerInBrowser.Events;
 
 export class BundlerInBrowser {
   public readonly fs: BundlerInBrowser.IFs;
@@ -200,12 +240,12 @@ export class BundlerInBrowser {
   /**
    * stage1: compile user code, collect npm dependencies, yields CommonJS module
    */
-  async bundleUserCode(opts?: BundlerInBrowser.CompileUserCodeOptions) {
+  async bundleUserCode(opts: BundlerInBrowser.CompileUserCodeOptions): Promise<BundlerInBrowser.CompileUserCodeResult> {
     await this.assertInitialized();
 
     const npmRequired = new Set<string>();
     const vendorExports = new Set<string>();
-    const externalCollect = getExternalPlugin(opts?.external);
+    const externalCollect = getExternalPlugin(opts.external);
 
     const npmCollectPlugin = (): esbuild.Plugin => {
       return ({
@@ -228,14 +268,14 @@ export class BundlerInBrowser {
     }
 
     const output = await esbuild.build({
-      entryPoints: [opts?.entrypoint || "/index.js"],
+      entryPoints: [opts.entrypoint || "/index.js"],
       bundle: true,
       write: false,
       outdir: "/user",
       format: "cjs",
       target: "es2022",
       platform: "browser",
-      minify: !!opts?.minify,
+      minify: !!opts.minify,
       plugins: [
         externalCollect.plugin,
         ...this.userCodePlugins,
@@ -262,10 +302,10 @@ export class BundlerInBrowser {
   }
 
   /**
-   * stage2: bundle vendor, including npm install
+   * stage2: npm install & bundle vendor
    * 
-   * if `/package.json` exists, it will be used to specify dependencies version.
-   * new dependencies will be added to package.json, and will be installed too.
+   * - all new dependencies will be installed and add to `/package.json`
+   * - if `/package.json` exists, it will be used to specify dependencies version. ( the `npmRequired` doesn't include version number )
    */
   async bundleVendor(opts: {
     hash: string;
@@ -274,7 +314,7 @@ export class BundlerInBrowser {
 
     external?: (string | RegExp)[];
     define?: Record<string, string>;
-  }) {
+  }): Promise<BundlerInBrowser.VendorBundleResult> {
     await this.assertInitialized();
 
     const exposedDeps = Array.from(opts.exports)
@@ -381,12 +421,17 @@ export class BundlerInBrowser {
     return vendor;
   }
 
+  /**
+   * stage3: concat user code and vendor code
+   * 
+   * in the output, `js` is in UMD format, and `external` is dependencies excluded from the bundle.
+   */
   concatUserCodeAndVendors(
     userCode: { css: string, js: string; external: Set<string> },
     dlls: BundlerInBrowser.VendorBundleResult[],
     opts: Pick<BundlerInBrowser.CompileUserCodeOptions,
       'amdDefine' | 'umdGlobalName' | 'umdGlobalRequire'> = {},
-  ) {
+  ): BundlerInBrowser.ConcatCodeResult {
     const external = new Set(([...userCode.external]).concat(...dlls.map(dll => dll.external)));
 
     const amdDefine = opts.amdDefine || 'define';
@@ -456,13 +501,18 @@ export class BundlerInBrowser {
     return cloneDeep(this.lastVendorBundle);
   }
 
-  async compile(opts?: BundlerInBrowser.CompileUserCodeOptions) {
+  /**
+   * compile user code, install npm dependencies, and bundle to UMD format.
+   * 
+   * in the output, `js` is in UMD format, and `external` is dependencies excluded from the bundle.
+   */
+  async compile(opts?: BundlerInBrowser.CompileUserCodeOptions): Promise<BundlerInBrowser.CompileResult> {
     await this.assertInitialized();
     this.events.emit('compile:start');
 
     // stage 1: compile user code, collect npm dependencies, yields CommonJS module
 
-    const userCode = await this.bundleUserCode(opts);
+    const userCode = await this.bundleUserCode(opts || {});
     this.events.emit('compile:usercode', {
       npmRequired: userCode.npmRequired,
       vendorExports: userCode.vendorExports,
@@ -500,16 +550,25 @@ export class BundlerInBrowser {
 
     const final = this.concatUserCodeAndVendors(userCode, [vendorBundle], opts)
 
+    const external = new Set(final.external);
+    vendorBundle.external.forEach(ex => external.add(ex));
+
     return {
+      // from ConcatCodeResult
       js: final.js,
       css: final.css,
+      external,
+      // from userCode
+      npmRequired: new Set(userCode.npmRequired),
+      vendorExports: new Set(userCode.vendorExports),
+      // from vendorBundle
       vendorBundle,
-      npmRequired: Array.from(userCode.npmRequired),
-      external: Array.from(userCode.external),
-      vendorExports: Array.from(userCode.vendorExports),
     }
   }
 }
+
+/** alias of `BundlerInBrowser.Events` */
+export type BundlerInBrowserEvents = BundlerInBrowser.Events;
 
 function getExternalPlugin(external?: (string | RegExp)[]) {
   const regexParts: { [flags: string]: string[] } = {};

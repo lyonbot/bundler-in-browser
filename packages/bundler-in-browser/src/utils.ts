@@ -2,6 +2,22 @@ export function escapeRegExp(text: string) {
   return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 }
 
+export function isNil(obj: any): obj is null | undefined {
+  return obj === null || obj === undefined;
+}
+
+export function isNotNil<T>(obj: T | null | undefined): obj is NonNullable<T> {
+  return obj !== null && obj !== undefined;
+}
+
+export function toArray<T>(obj: Iterable<T>): NonNullable<T>[]
+export function toArray<T>(obj: T): NonNullable<T>[]
+export function toArray<T>(obj: Iterable<T> | T): NonNullable<T>[] {
+  if (Array.isArray(obj)) return obj.filter(isNotNil) as NonNullable<T>[];
+  if (isNil(obj)) return [];
+  return [obj as NonNullable<T>];
+}
+
 export function cloneDeep<T>(obj: T): T {
   if (typeof obj !== 'object' || obj === null) return obj;
   if (Array.isArray(obj)) return obj.map(cloneDeep) as any;
@@ -94,12 +110,25 @@ export function makeParallelTaskMgr() {
 }
 
 /** 
- * given a cjs module source, wrap it into a IIFE (like `(()=>{...}())` wrapped in bracket), whose value is `module.exports`
+ * wrap a commonjs `code` into a IIFE expression. its value is exactly what `module.exports` is.
  * 
- * beware `require` is not defined inside.
+ * if your code relies on `require()`, you must add it before the IIFE expression. see example below.
+ * 
+ * @example
+ * ```
+ * const code = `exports.foo = "hello " + require('fourty-two')`
+ * 
+ * const output = `
+ *   // concatenated code
+ *   var require = (id) => 42;   // mocked require() always return 42
+ *   var mod1 = ${wrapCommonJS(code)};
+ *   console.log(mod1.foo);
+ * `
+ * eval(output); // "hello 42"
+ * ```
  */
-export function wrapCommonJS(code: string) {
-  return `((modules => ((exports=>{${code}\n})(modules.exports), modules.exports))({exports:{}}))`
+export function wrapCommonJS(code: string, modules = '{exports:{}}') {
+  return `((modules => ((exports=>{${code}\n})(modules.exports), modules.exports))(${modules}))`
 }
 
 /**
