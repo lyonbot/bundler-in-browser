@@ -14,7 +14,7 @@ setInterval(() => { confetti() }, 3000);
 confetti();
 
 // uncomment to test React + CodeMirror + module-css
-// import './index-codemirror';
+// import './react/index';
 `,
   "/src/tailwind.css": `
 @tailwind base;
@@ -22,9 +22,14 @@ confetti();
 @tailwind utilities;
 `,
   "/tailwind.config.js": `
+// ⚠️ not suggested to use this config, because we use eval to load it
+// please pass the config object directly to bundler-in-browser, not this virtual file
+
 module.exports = {
   // "content" is ignored - managed by bundler-in-browser
   // content: [ "./src/**/*.{vue,js,ts,jsx,tsx}" ],
+
+  // 3rd-party plugins not work here.
 
   corePlugins: {
     preflight: false,  // remove Tailwind's reset
@@ -89,7 +94,7 @@ h1 {
   "/src/vue.svg": `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 261.76 226.69"><path d="M161.096.001l-30.225 52.351L100.647.001H-.005l130.877 226.688L261.749.001z" fill="#41b883"/><path d="M161.096.001l-30.225 52.351L100.647.001H52.346l78.526 136.01L209.398.001z" fill="#34495e"/></svg>
 `,
-  "/src/index-codemirror.js": `
+  "/src/react/index.js": `
 // ------- React -------
 import React from 'react';
 import { createRoot } from 'react-dom/client';
@@ -106,23 +111,23 @@ import("./tst-dynamic.js").then(d => { console.log('dayjs=', d) })
 
 // ------- CSS ------
 import "github-markdown-css/github-markdown-dark.css";
-import * as S from "./tst-base.module.scss";
+import styles from "./styles.module.scss";
 
 const text = document.createElement('div');
 text.innerText = 'hello world';
-text.className = S.hello;
+text.className = styles.hello;
 document.body.appendChild(text);
   `,
-  "/src/tst-base.module.scss": `
+  "/src/react/styles.module.scss": `
 .hello {
-  color: red;
+  @apply my-4 text-red-500 text-2xl animate-bounce;
 }
   `,
-  "/src/tst-dynamic.js": `
+  "/src/react/tst-dynamic.js": `
 import dayjs from "dayjs";
 export { dayjs }
   `,
-  "/src/sqlEditor.jsx": `
+  "/src/react/sqlEditor.jsx": `
 import React, { useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { sql } from '@codemirror/lang-sql';

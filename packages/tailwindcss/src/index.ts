@@ -83,7 +83,7 @@ export default function installTailwindPlugin(bundler: BundlerInBrowser, options
           } else if (typeof raw === 'string') {
             // dangerously use eval to load the config
             let configSource = fs.readFileSync(raw, 'utf-8') as string;
-            tailwindConfig = eval(wrapCommonJS(configSource));
+            tailwindConfig = new Function('return ' + wrapCommonJS(configSource))();
             if (typeof tailwindConfig !== 'object' || tailwindConfig === null) {
               throw new Error(`Tailwind config must be an object: ${raw}`);
             }

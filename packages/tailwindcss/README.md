@@ -4,6 +4,13 @@ A Tailwind CSS plugin for [bundler-in-browser](https://github.com/lyonbot/bundle
 
 [![github](https://img.shields.io/badge/github-source-blue)](https://github.com/lyonbot/bundler-in-browser) [![example](https://img.shields.io/badge/example-online-green)](https://lyonbot.github.io/bundler-in-browser/)
 
+What works:
+
+- directives (@tailwind, @apply, @layer, @variants, @responsive)
+- configuration (theme, plugins, corePlugins etc.)
+- scss and css-modules
+- third-party plugins (need to be configured, see below)
+
 ## Installation
 
 ```bash
@@ -73,7 +80,7 @@ module.exports = {
 
 ## Advanced Usage
 
-### Use tailwind plugins
+### Use third-party plugins
 
 Most tailwind plugins relies on `tailwindcss/plugin` and so on. To avoid duplicated bundling for your editor, please **configure alias for tailwindcss**.
 

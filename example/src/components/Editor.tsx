@@ -34,6 +34,7 @@ export const Editor: React.FC<EditorProps> = ({
       <div
         style={{
           display: "flex",
+          flexWrap: 'wrap',
           backgroundColor: "#1e1e1e",
           padding: "4px",
           gap: "2px",
