@@ -24,16 +24,18 @@ export const ResizablePanel: React.FC<ResizablePanelProps> = ({
       if (!panel) return;
 
       const startWidth = panel.offsetWidth;
+      let newWidth = startWidth;
+
       e.preventDefault();
       setIsResizing(true);
       startMouseMove({
         initialEvent: e.nativeEvent,
         onMove(e) {
-          const newWidth = startWidth + e.deltaX;
-          panel.style.width = `${newWidth}px`;
-          setWidth(`${newWidth}px`);
+          newWidth = startWidth + e.deltaX;
+          panel.style.flexBasis = `${newWidth}px`;
         },
         onEnd() {
+          setWidth(`${newWidth}px`);
           setIsResizing(false);
         },
       });
