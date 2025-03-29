@@ -5,7 +5,7 @@ import { useAtomValue } from "jotai";
 import type { PartialMessage } from "esbuild-wasm";
 
 interface PreviewProps {
-  onFileSelect?(path: string): void
+  onFileSelect?(path: string, location?: { line: number, column: number }): void;
 }
 
 const NPMProgressView = memo(() => {
@@ -68,7 +68,8 @@ const CompileErrorView = memo((props: Pick<PreviewProps, 'onFileSelect'>) => {
                 onClick={e => {
                   e.preventDefault();
                   const path = '/' + location.file;
-                  props.onFileSelect?.(path);
+                  const loc = location.line ? { line: location.line, column: location.column! } : undefined;
+                  props.onFileSelect?.(path, loc);
                 }}>
                 {location.file}:{location.line}:{location.column}
               </div>

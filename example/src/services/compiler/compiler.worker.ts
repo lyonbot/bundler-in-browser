@@ -48,7 +48,7 @@ async function main() {
   });
   await installSassPlugin(bundler);
   await installVuePlugin(bundler, { enableProdDevTools: true });
-await installTailwindPlugin(bundler, {
+  await installTailwindPlugin(bundler, {
     tailwindConfig: "/tailwind.config.js",
     // tailwindConfig: {
     //   corePlugins: {
@@ -72,9 +72,21 @@ await installTailwindPlugin(bundler, {
           wrappedJs: wrapCommonJS(result.js),
         };
         data.port.postMessage(message);
+        log("compile:done", result);
       })
       .catch((err: Error & { errors?: (PartialMessage | Error)[] }) => {
         data.port.postMessage({ errors: err.errors || [err] });
+
+        log(`compile:error ${err}`);
+        // if (err.errors?.length) {
+        //   err.errors.forEach((error, index, errors) => {
+        //     let msg = 'text' in error ? error.text : String(error);
+        //     let pos = 'location' in error && error.location ? ` (${error.location.file}:${error.location.line}:${error.location.column})` : '';
+        //     log(`compile:error ${index + 1}/${errors.length}`, msg, pos);
+        //   })
+        // } else {
+        //   log(err);
+        // }
       });
 
     data.port.close();

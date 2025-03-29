@@ -21,7 +21,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string | null>(entryPath);
   const [tabs, setTabs] = useState<Tab[]>([{ path: entryPath, content: files[entryPath] }]);
 
-  const handleFileSelect = (path: string) => {
+  const handleFileSelect = (path: string, location?: { line: number, column: number }) => {
     if (!tabs.find((tab) => tab.path === path)) {
       setTabs((prev) => [...prev, { path, content: files[path] || "" }]);
     }
@@ -29,7 +29,15 @@ const App: React.FC = () => {
     setTimeout(() => {
       try {
         const monaco = (window as any).monaco;
-        monaco.editor.getEditors()[0].focus()
+        const editor = monaco.editor.getEditors()[0]
+        editor.focus()
+        if (location) {
+          editor.setPosition({
+            lineNumber: location.line,
+            column: 1 + location.column,
+          })
+          editor.revealLineInCenter(location.line)
+        }
       } catch (e) {
         // ignore
       }
@@ -102,7 +110,7 @@ const App: React.FC = () => {
           />
         </div>
       </div>
-      <OutputPanel />
+      <OutputPanel onFileSelect={handleFileSelect} />
     </div>
   );
 };

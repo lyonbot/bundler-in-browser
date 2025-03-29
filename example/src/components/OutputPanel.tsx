@@ -1,11 +1,56 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, memo, useMemo } from 'react';
 import { useCompilerService } from '../services/compiler';
 import { useAtomValue } from 'jotai';
 import dayjs from 'dayjs';
 
-interface OutputPanelProps { }
+interface OutputPanelProps {
+  onFileSelect?(path: string, location?: { line: number, column: number }): void;
+}
 
-export const OutputPanel: React.FC<OutputPanelProps> = () => {
+const WithAutoFileLink = memo((props: { text: string } & OutputPanelProps) => {
+  const { text, onFileSelect } = props;
+
+  let lastOnFileSelect = useRef<OutputPanelProps['onFileSelect']>(onFileSelect);
+  lastOnFileSelect.current = onFileSelect;
+
+  const nodes = useMemo(() => {
+    const ans: React.ReactNode[] = [];
+    const re = /((?:^|\/)src\/[^\s:]+)(\:(\d+)\:(\d+))?/gm;
+    let match: RegExpExecArray | null;
+    let lastIndex = 0;
+
+    while ((match = re.exec(text)) !== null) {
+      const prefix = text.slice(lastIndex, match.index);
+      ans.push(<span key={`${prefix}-${lastIndex}`}>{prefix}</span>);
+
+      let path = match[1];
+      if (!path.startsWith('/')) path = `/${path}`;
+      let loc: { line: number, column: number } | undefined;
+
+      if (match[2]) {
+        loc = { line: Number(match[3]), column: Number(match[4]) };
+      }
+
+      ans.push(<a
+        key={path}
+        href="#"
+        style={{ color: '#eef' }}
+        onClick={e => {
+          e.preventDefault();
+          lastOnFileSelect.current?.(path, loc);
+        }}
+      >{match[0]}</a>);
+
+      lastIndex = match.index + match[0].length;
+    }
+    ans.push(<span key={`last-${lastIndex}`}>{text.slice(lastIndex)}</span>);
+    return ans;
+  }, [text]);
+
+  return <>{nodes}</>;
+});
+
+export const OutputPanel: React.FC<OutputPanelProps> = ({ onFileSelect }) => {
   const preRef = useRef<HTMLPreElement>(null);
 
   const compilerService = useCompilerService();
@@ -72,7 +117,8 @@ export const OutputPanel: React.FC<OutputPanelProps> = () => {
       >
         {logs.map((log, i) => (
           <div key={i}>
-            {dayjs(log.timestamp).format('HH:mm:ss')} {log.message}
+            {dayjs(log.timestamp).format('HH:mm:ss')}
+            <WithAutoFileLink text={log.message} onFileSelect={onFileSelect} />
           </div>
         ))}
       </pre>
