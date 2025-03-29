@@ -282,8 +282,20 @@ export class BundlerInBrowser {
       if (p) userCodePlugins.push(p);
     }
 
+    let entryPath = opts.entrypoint;
+    if (!entryPath) {
+      const candidates = [
+        '/index.js', '/index.ts', '/index.jsx', '/index.tsx',
+        '/src/index.js', '/src/index.ts', '/src/index.jsx', '/src/index.tsx',
+      ];
+      for (let path of candidates) {
+        if (this.fs.existsSync(path)) { entryPath = path; break }
+      }
+      if (!entryPath) throw new Error(`Cannot find entry point, please specify one in options.entrypoint`);
+    }
+
     const output = await esbuild.build({
-      entryPoints: [opts.entrypoint || "/index.js"],
+      entryPoints: [entryPath],
       bundle: true,
       write: false,
       outdir: "/user",
