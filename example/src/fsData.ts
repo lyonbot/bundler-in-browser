@@ -59,13 +59,15 @@ module.exports = {
 import { ref, computed } from 'vue';
 const count = ref(0);
 const increment = () => count.value++;
+
 const hue = computed(() => (count.value * 40) % 360);
+const textColor = computed(() => \`hsla(\${hue.value}, 100%, 37%, 1)\`);
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 h1 {
   text-align: center;
-  color: hsla(v-bind(hue), 100%, 37%, 1);
+  color: v-bind(textColor);
   margin-top: 2em;
 }
 
@@ -83,11 +85,11 @@ h1 {
   margin-top: 4em;
   text-align: center;
   color: #333;
-}
 
-.footer a {
-  color: #30a;
-  text-decoration-style: dashed;
+  a {
+    color: #30a;
+    text-decoration-style: dashed;
+  }
 }
 </style>
 `,

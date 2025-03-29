@@ -175,11 +175,14 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
             text: 'style: ' + (e.reason || e.message || e),
             location: {
               file: toESBuildErrorCtx.currentFile,
-              ...e.line >= 1 ? {
+              ...e.line >= 1 ? {   // for css
                 line: e.line - 1 + style.loc.start.line,
                 column: e.column - 1,
                 lineText: getLineText(e.source, e.line),
-              } : null
+              } : null,
+              ...e.sassStack && e.span ? {   // for sass
+                ...toESBuildErrorCtx.offsetToPosition?.(e.span.start.offset + style.loc.start.offset),
+              } : null,
             }
           }))
         };
@@ -225,10 +228,10 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
               // both exists! try to find out by parsing Vue generated codeFrame
               let m = String(e)
               let lp = /^\s+\|\s*\^/m.exec(m)?.index // the line of  "   |   ^"
-              let lp2 = m.lastIndexOf('|', lp!+1) // prev line like  "21 | v.."
-              let lp3 = m.lastIndexOf('\n', lp2)+1 // prev line like  "21 | v.."
+              let lp2 = m.lastIndexOf('|', lp! + 1) // prev line like  "21 | v.."
+              let lp3 = m.lastIndexOf('\n', lp2) + 1 // prev line like  "21 | v.."
               let lineNo = parseInt(m.slice(lp3, lp2), 10)
-              
+
               if (offsetPos0.line <= lineNo && descriptor.script!.loc.end.line >= lineNo) {
                 offsetPos = offsetPos0
               } else {
@@ -367,8 +370,9 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
 const getPreprocessCustomRequireWithSass = memoAsync(async () => {
   const sass = await import('sass');
 
-  const sassCompile = (opts: { data: string, file: string }) => {
+  const sassCompile = (opts: { data: string, file: string, indentedSyntax?: boolean }) => {
     const out = sass.compileString(opts.data, {
+      syntax: opts.indentedSyntax ? 'indented' : 'scss',
     });
     return {
       css: out.css,
@@ -380,7 +384,7 @@ const getPreprocessCustomRequireWithSass = memoAsync(async () => {
   }
 
   const preprocessCustomRequire = (id: string) => {
-    if (id === 'sass' || id === 'scss') return { renderSync: sassCompile };
+    if (id === 'sass') return { renderSync: sassCompile };
     return null;
   };
 
