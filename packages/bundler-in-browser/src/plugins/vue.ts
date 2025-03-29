@@ -1,5 +1,6 @@
 import { stringHash } from 'yon-utils';
 import * as compiler from 'vue/compiler-sfc';
+import { ElementTypes, NodeTypes, type Position } from '@vue/compiler-core';
 import type { BundlerInBrowser } from "../BundlerInBrowser.js";
 import type esbuild from "esbuild-wasm";
 import path from "path";
@@ -65,8 +66,10 @@ function getLineText(source: string, line: number) {
   return source.slice(lineStart, lineEnd)
 }
 
+type BabelSyntaxError = Error & { loc: { line: number, column: number, index: number, source: undefined } }
+
 function toESBuildError(
-  e: string | SyntaxError | compiler.CompilerError,
+  e: string | SyntaxError | compiler.CompilerError | BabelSyntaxError,
   ctx: {
     offsetToPosition?: (offset: number) => { line: number, column: number, lineText?: string }
     currentFile: string
@@ -76,13 +79,24 @@ function toESBuildError(
 
   if (e instanceof Error) {
     if ('loc' in e && e.loc) {
-      const locator = ctx.offsetToPosition?.(e.loc.start.offset) || { line: e.loc.start.line, column: e.loc.start.column }
+      let start: Position, end: Position
+
+      if ('start' in e.loc) {
+        // vue error
+        start = e.loc.start
+        end = e.loc.end || start
+      } else {
+        // babel error
+        end = start = { line: e.loc.line, column: e.loc.column, offset: e.loc.index }
+      }
+
+      const locator = ctx.offsetToPosition?.(start.offset) || { line: start.line, column: start.column }
       return {
         text: e.message,
         location: {
           file: e.loc.source || ctx.currentFile,
           ...locator,
-          length: e.loc.end.offset - e.loc.start.offset,
+          length: end.offset - start.offset,
         },
       }
     };
@@ -179,24 +193,57 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         const { id, scopeId, expressionPlugins, toESBuildErrorCtx, esbuildLoader, hasJSX } = args.pluginData.vue;
 
         const filename = descriptor.filename;
-        const compiledScript = compiler.compileScript(descriptor, {
-          inlineTemplate: true,
-          id,
-          genDefaultAs: COMP_IDENTIFIER,
-          fs: {
-            fileExists: (file) => bundler.fs.existsSync(file),
-            readFile: (file) => { try { return bundler.fs.readFileSync(file, 'utf8') as string; } catch { } },
-            realpath: (file) => bundler.fs.realpathSync(file, { encoding: 'utf8' }) as string,
-          },
-          templateOptions: {
-            ast: descriptor.template?.ast,
-            compilerOptions: {
-              filename,
-              scopeId,
-              expressionPlugins,
+        let compiledScript: ReturnType<typeof compiler.compileScript>;
+        try {
+          compiledScript = compiler.compileScript(descriptor, {
+            inlineTemplate: true,
+            id,
+            genDefaultAs: COMP_IDENTIFIER,
+            fs: {
+              fileExists: (file) => bundler.fs.existsSync(file),
+              readFile: (file) => { try { return bundler.fs.readFileSync(file, 'utf8') as string; } catch { } },
+              realpath: (file) => bundler.fs.realpathSync(file, { encoding: 'utf8' }) as string,
             },
-          },
-        });
+            templateOptions: {
+              ast: descriptor.template?.ast,
+              compilerOptions: {
+                filename,
+                scopeId,
+                expressionPlugins,
+              },
+            },
+          });
+        } catch (e) {
+          if ('loc' in (e as any)) {
+            // vue-compiler doesn't fix Babel's loc information.try to find out the real loc
+            // (could be in script or scriptSetup)
+            const offsetPos0 = descriptor.script?.loc.start
+            const offsetPos1 = descriptor.scriptSetup?.loc.start
+
+            let offsetPos = offsetPos0 || offsetPos1
+            if (offsetPos0 && offsetPos1) {
+              // both exists! try to find out by parsing Vue generated codeFrame
+              let m = String(e)
+              let lp = /^\s+\|\s*\^/m.exec(m)?.index // the line of  "   |   ^"
+              let lp2 = m.lastIndexOf('|', lp!+1) // prev line like  "21 | v.."
+              let lp3 = m.lastIndexOf('\n', lp2)+1 // prev line like  "21 | v.."
+              let lineNo = parseInt(m.slice(lp3, lp2), 10)
+              
+              if (offsetPos0.line <= lineNo && descriptor.script!.loc.end.line >= lineNo) {
+                offsetPos = offsetPos0
+              } else {
+                offsetPos = offsetPos1
+              }
+            }
+
+            // fix loc information for Babel
+            const loc = (e as any).loc as BabelSyntaxError['loc']
+            loc.line += offsetPos!.line
+            loc.column += offsetPos!.column
+            loc.index += offsetPos!.offset
+          }
+          return { errors: [toESBuildError(e as SyntaxError, toESBuildErrorCtx)] }
+        }
 
         const errors = compiledScript.warnings?.map(e => toESBuildError(e, toESBuildErrorCtx)) || [];
         if (errors.length > 0) return { errors };
