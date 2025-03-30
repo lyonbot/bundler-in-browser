@@ -1,14 +1,14 @@
 {
     "name": "playground",
     "private": true,
-    "version": "0.0.1",
+    "version": "0.0.2",
     "type": "module",
     "scripts": {
         "dev": "vite --open ./index.html",
         "build": "vite build"
     },
     "dependencies": {
-        "@bundler-in-browser/tailwindcss": "workspace:^0.1.1",
+        "@bundler-in-browser/tailwindcss": "workspace:^0.1.2",
         "@monaco-editor/react": "^4.7.0",
         "@types/react": "^19.0.12",
         "@types/react-dom": "^19.0.4",

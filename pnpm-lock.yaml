@@ -15,7 +15,7 @@ importers:
   example:
     dependencies:
       '@bundler-in-browser/tailwindcss':
-        specifier: workspace:^0.1.1
+        specifier: workspace:^0.1.2
         version: link:../packages/tailwindcss
       '@monaco-editor/react':
         specifier: ^4.7.0

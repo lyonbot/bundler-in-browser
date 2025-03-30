@@ -1,6 +1,6 @@
 {
   "name": "@bundler-in-browser/tailwindcss",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "tailwindcss plugin for bundler-in-browser",
   "homepage": "https://lyonbot.github.io/bundler-in-browser/",
   "publishConfig": {

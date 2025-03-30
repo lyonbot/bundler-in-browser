@@ -9,8 +9,8 @@ npx changeset version
 
 pnpm install  # update lockfile
 pnpm build
-pnpm publish -r
 
 git commit -am "publish new version"
+pnpm publish -r
 npx changeset tag
 ```
