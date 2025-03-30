@@ -307,6 +307,8 @@ export class MiniNPM {
     //   1. create symlinks to its dependents;
     //   2. create symlinks to `${nodeModulesDir}` if is Root's dependent, or can be hoisted
 
+    this.fs.mkdirSync(`${this.options.nodeModulesDir}/.store`, { recursive: true });
+
     let current = 0;
     let event: MiniNPM.ProgressEvent = {
       type: 'progress',

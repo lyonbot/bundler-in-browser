@@ -86,6 +86,8 @@ export function makeParallelTaskMgr() {
   }
   const run = async (concurrency: number = 5) => {
     if (onLastWorkerExit) throw new Error("Already running");
+    if (!queue.length) return;
+
     maxConcurrency = concurrency;
 
     const promise = new Promise<void>((resolve, reject) => {
