@@ -318,6 +318,16 @@ export class MiniNPM {
       total: Object.keys(requiredPackages).length - 1, // -1 for root
     }
 
+    const createLink = (from: string, dest: string) => {
+      try {
+        this.fs.mkdirSync(path.dirname(dest), { recursive: true });
+        this.fs.symlinkSync(from, dest);
+      } catch (err) {
+        if (String(err).includes('already exists')) return;
+        throw err;
+      }
+    }
+
     Object.values(requiredPackages).forEach(dep => {
       if (dep.id === this.ROOT) return;
 
@@ -337,15 +347,13 @@ export class MiniNPM {
           if (dependent === this.ROOT) continue; // root's dependents is always hoisted later.
 
           const dest = `${this.options.nodeModulesDir}/.store/${dependent}/node_modules/${dep.name}`;
-          this.fs.mkdirSync(path.dirname(dest), { recursive: true });
-          this.fs.symlinkSync(directory, dest);
+          createLink(directory, dest);
         }
 
         // hoist to `${nodeModulesDir}` if is root's dependent, or can be hoisted
         if (hoisted.has(dep.id)) {
           const dest = `${this.options.nodeModulesDir}/${dep.name}`;
-          this.fs.mkdirSync(path.dirname(dest), { recursive: true });
-          this.fs.symlinkSync(directory, dest);
+          createLink(directory, dest);
         }
 
         this.events.emit('progress', {
