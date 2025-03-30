@@ -12,6 +12,7 @@ const nullobj = require.resolve('./src/dirty-stuff/empty-object.cjs')
 export default defineConfig({
   define: {
     'process.env.NODE_ENV': '"development"',
+    'process': '{"env":{}}',  // WTF for postcss
     // 'process.platform': '"browser"',
   },
   resolve: {
