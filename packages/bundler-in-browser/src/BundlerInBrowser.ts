@@ -119,16 +119,27 @@ export namespace BundlerInBrowser {
     'npm:install:error': (ev: { errors: Error[] }) => void;
   }
 
+  /** 
+   * a minimal fs for bundler-in-browser, must implement all these methods 
+   * 
+   * (signatures not strictly accurate - using versatile types to avoid weird TypeScript errors)
+   */
   export interface IFs {
     existsSync(path: string): boolean;
     readFileSync(path: string, encoding?: 'utf-8' | string | any): string | Uint8Array;
     writeFileSync(path: string, data: string | Uint8Array): void;
-    readdirSync(path: string): string[];
+    readdirSync(path: string): any[];
     mkdirSync(path: string, opts?: { recursive?: boolean }): any;
     symlinkSync(target: string, path: string): void;
     realpathSync(path: string, opts?: string | { encoding?: string }): any;
     unlinkSync(path: string): void;
     rmSync(path: string, opts?: { recursive?: boolean, force?: boolean }): void;
+
+    readFile(path: string, cb: (err: any, data: any) => void): void;
+    readFile(path: string, encoding: 'utf-8' | string | any, cb: (err: any, data: any) => void): void;
+    stat(path: string, cb: (err: any, stats: any) => void): void;
+    readlink(path: string, cb: (err: any, linkString: any) => void): void;
+    readlink(path: string, options: any, cb: (err: any, linkString: any) => void): void;
   }
 }
 
