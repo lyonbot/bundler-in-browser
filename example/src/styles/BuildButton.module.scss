@@ -1,4 +1,4 @@
-.compileButton {
+.buildButton {
   background-image: linear-gradient(315deg, #2563eb 0%, #3b82f6 70%);
   border: 1px solid #3b82f6;
   color: #fff;
@@ -39,7 +39,7 @@
     vertical-align: middle;
   }
   
-  &.compiling {
+  &.building {
     background-color: #1d4ed8;
     border-color: #2563eb;
     position: relative;

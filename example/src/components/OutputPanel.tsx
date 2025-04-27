@@ -101,7 +101,7 @@ export const OutputPanel: React.FC<OutputPanelProps> = ({ onFileSelect }) => {
         </button>
       </div>
       <pre
-        id="compile-log"
+        id="build-log"
         ref={preRef}
         style={{
           margin: 0,

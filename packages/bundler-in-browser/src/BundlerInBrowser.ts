@@ -18,7 +18,7 @@ export namespace BundlerInBrowser {
     css: string;
   }
 
-  export interface CompileUserCodeOptions {
+  export interface BuildUserCodeOptions {
     /** defaults to `/index.js` */
     entrypoint?: string;
 
@@ -64,7 +64,7 @@ export namespace BundlerInBrowser {
     postcssProcessor?: typeof import('postcss').Processor
   }
 
-  export interface CompileUserCodeResult {
+  export interface BuildUserCodeResult {
     /** entry js file content, in CommonJS format */
     js: string;
 
@@ -77,7 +77,7 @@ export namespace BundlerInBrowser {
     /** full vendor paths imported by user code, eg `["vue", "lodash/debounce"]` */
     vendorExports: Set<string>;
 
-    /** all actual-used dependencies that declared in `external` (the compile options) */
+    /** all actual-used dependencies that declared in `external` (the build options) */
     external: Set<string>;
 
     /** raw esbuild output */
@@ -95,9 +95,9 @@ export namespace BundlerInBrowser {
     external: Set<string>;
   }
 
-  export type CompileResult
+  export type BuildResult
     = ConcatCodeResult
-    & Pick<CompileUserCodeResult, 'npmRequired' | 'vendorExports'>
+    & Pick<BuildUserCodeResult, 'npmRequired' | 'vendorExports'>
     & {
       /** 
        * the used vendor bundle.
@@ -109,9 +109,9 @@ export namespace BundlerInBrowser {
 
   export interface Events {
     'initialized': () => void;
-    'compile:start': () => void;
-    'compile:usercode': (result: { npmRequired: Set<string>, vendorExports: Set<string>, external: Set<string> }) => void;
-    'compile:vendor': (result: BundlerInBrowser.VendorBundleResult) => void;
+    'build:start': () => void;
+    'build:usercode': (result: { npmRequired: Set<string>, vendorExports: Set<string>, external: Set<string> }) => void;
+    'build:vendor': (result: BundlerInBrowser.VendorBundleResult) => void;
     'npm:progress': (event: MiniNPM.ProgressEvent) => void;
     'npm:packagejson:update': (newPackageJson: any) => void;
     'npm:install:done': () => void;
@@ -154,7 +154,7 @@ export class BundlerInBrowser {
     await this.initialized;
   }
 
-  public userCodePlugins: (esbuild.Plugin | ((opts: BundlerInBrowser.CompileUserCodeOptions) => (esbuild.Plugin | null)))[] = [] // only for user code
+  public userCodePlugins: (esbuild.Plugin | ((opts: BundlerInBrowser.BuildUserCodeOptions) => (esbuild.Plugin | null)))[] = [] // only for user code
   public vendorPlugins: esbuild.Plugin[] = [] // only for vendor code
   public commonPlugins: esbuild.Plugin[] = [] // works for both user and vendor, will be appended to user plugins
 
@@ -246,9 +246,9 @@ export class BundlerInBrowser {
   npm: MiniNPM;
 
   /**
-   * stage1: compile user code, collect npm dependencies, yields CommonJS module
+   * stage1: build user code, collect npm dependencies, yields CommonJS module
    */
-  async bundleUserCode(opts: BundlerInBrowser.CompileUserCodeOptions): Promise<BundlerInBrowser.CompileUserCodeResult> {
+  async bundleUserCode(opts: BundlerInBrowser.BuildUserCodeOptions): Promise<BundlerInBrowser.BuildUserCodeResult> {
     await this.assertInitialized();
 
     const npmRequired = new Set<string>();
@@ -455,7 +455,7 @@ export class BundlerInBrowser {
   concatUserCodeAndVendors(
     userCode: { css: string, js: string; external: Set<string> },
     dlls: BundlerInBrowser.VendorBundleResult[],
-    opts: Pick<BundlerInBrowser.CompileUserCodeOptions,
+    opts: Pick<BundlerInBrowser.BuildUserCodeOptions,
       'amdDefine' | 'umdGlobalName' | 'umdGlobalRequire'> = {},
   ): BundlerInBrowser.ConcatCodeResult {
     const external = new Set(([...userCode.external]).concat(...dlls.map(dll => dll.external)));
@@ -506,7 +506,7 @@ export class BundlerInBrowser {
     return { js: finalJs, css: finalCss, external }
   }
 
-  /** cached result of `bundleVendor()`, only for `compile()` */
+  /** cached result of `bundleVendor()`, only for `build()` */
   lastVendorBundle: undefined | BundlerInBrowser.VendorBundleResult
 
   loadVendorBundle(bundle: BundlerInBrowser.VendorBundleResult | undefined | null) {
@@ -528,18 +528,18 @@ export class BundlerInBrowser {
   }
 
   /**
-   * compile user code, install npm dependencies, and bundle to UMD format.
+   * build and compile user code, install npm dependencies, and bundle to UMD format.
    * 
    * in the output, `js` is in UMD format, and `external` is dependencies excluded from the bundle.
    */
-  async compile(opts?: BundlerInBrowser.CompileUserCodeOptions): Promise<BundlerInBrowser.CompileResult> {
+  async build(opts?: BundlerInBrowser.BuildUserCodeOptions): Promise<BundlerInBrowser.BuildResult> {
     await this.assertInitialized();
-    this.events.emit('compile:start');
+    this.events.emit('build:start');
 
-    // stage 1: compile user code, collect npm dependencies, yields CommonJS module
+    // stage 1: build user code, collect npm dependencies, yields CommonJS module
 
     const userCode = await this.bundleUserCode(opts || {});
-    this.events.emit('compile:usercode', {
+    this.events.emit('build:usercode', {
       npmRequired: userCode.npmRequired,
       vendorExports: userCode.vendorExports,
       external: userCode.external
@@ -570,7 +570,7 @@ export class BundlerInBrowser {
         define: opts?.define,
       }))
 
-    this.events.emit('compile:vendor', vendorBundle);
+    this.events.emit('build:vendor', vendorBundle);
 
     // phase 3: concat all into one file
 

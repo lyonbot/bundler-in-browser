@@ -3,22 +3,22 @@ import React, { memo, useContext, useEffect, useRef } from "react";
 import { FileSystemContext } from "../contexts/FileSystemContext";
 import { useCompilerService } from "../services/compiler";
 import { clsx, MOD_KEY_LABEL } from "yon-utils";
-import styles from "../styles/CompileButton.module.scss";
+import styles from "../styles/BuildButton.module.scss";
 
-function StartCompileButton() {
+function StartBuildButton() {
   const compilerService = useCompilerService();
   const { files } = useContext(FileSystemContext);
-  const isCompiling = useAtomValue(compilerService.isCompilingAtom);
+  const isBuilding = useAtomValue(compilerService.isCompilingAtom);
 
-  const doCompile = useRef<() => void>(null as any);
-  doCompile.current = () => compilerService.compile({ ...files });
+  const doBuild = useRef<() => void>(null as any);
+  doBuild.current = () => compilerService.build({ ...files });
 
   useEffect(() => {
-    setTimeout(() => doCompile.current(), 100);
+    setTimeout(() => doBuild.current(), 100);
 
     function handleKeyDown(e: KeyboardEvent) {
       if (e.code === "KeyS" && (e.metaKey || e.ctrlKey)) {
-        doCompile.current();
+        doBuild.current();
         e.preventDefault();
         e.stopPropagation();
       }
@@ -31,14 +31,14 @@ function StartCompileButton() {
   return (
     <button
       type="button"
-      disabled={isCompiling}
-      onClick={doCompile.current}
-      className={clsx(styles.compileButton, isCompiling && styles.compiling)}
+      disabled={isBuilding}
+      onClick={doBuild.current}
+      className={clsx(styles.buildButton, isBuilding && styles.building)}
     >
-      <span>{isCompiling ? "Compiling..." : "▶︎ Run"}</span>
+      <span>{isBuilding ? "Building..." : "▶︎ Run"}</span>
       <kbd>{MOD_KEY_LABEL}+S</kbd>
     </button>
   );
 }
 
-export default memo(StartCompileButton);
+export default memo(StartBuildButton);

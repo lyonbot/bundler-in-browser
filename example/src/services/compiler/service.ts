@@ -95,7 +95,7 @@ export class CompilerService {
    * @param {Object} files - Key-value pairs of file paths and their contents
    * @param {string} files[path] - Content of the file at the specified path
    */
-  async compile(files: { [path: string]: string }) {
+  async build(files: { [path: string]: string }) {
     const { port1, port2 } = new MessageChannel();
     const message: CompilationRequest = {
       type: "compile",

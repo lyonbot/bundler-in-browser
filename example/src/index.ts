@@ -22,47 +22,47 @@ const fs = new Proxy({} as typeof fsRaw, {
 window.fs = fs;
 main();
 
-const pre = document.getElementById('compile-log')!;
+const pre = document.getElementById('build-log')!;
 
 async function main() {
-  const compiler = new BundlerInBrowser(fs as any);
+  const bundler = new BundlerInBrowser(fs as any);
 
-  compiler.events.on('initialized', () => log('initialized'));
-  compiler.events.on('npm:progress', (e) => log(`[npm] [${e.stage}] [${e.current} / ${e.total}] ${e.packageId}`));
-  compiler.events.on('npm:install:done', () => log(`[npm] install:done`));
-  compiler.events.on('npm:install:error', (e) => log(`[npm] install:error`, e.errors));
+  bundler.events.on('initialized', () => log('initialized'));
+  bundler.events.on('npm:progress', (e) => log(`[npm] [${e.stage}] [${e.current} / ${e.total}] ${e.packageId}`));
+  bundler.events.on('npm:install:done', () => log(`[npm] install:done`));
+  bundler.events.on('npm:install:error', (e) => log(`[npm] install:error`, e.errors));
 
-  compiler.events.on('compile:start', () => log('compile:start'));
-  compiler.events.on('compile:usercode', (result) => log('compile:usercode', result));
-  compiler.events.on('compile:vendor', (result) => log('compile:vendor', result));
+  bundler.events.on('build:start', () => log('build:start'));
+  bundler.events.on('build:usercode', (result) => log('build:usercode', result));
+  bundler.events.on('build:vendor', (result) => log('build:vendor', result));
 
 
-  await compiler.initialize({
+  await bundler.initialize({
     esbuildWasmURL: esbuildWasmURL
   });
 
-  await installSassPlugin(compiler);
-  await installVuePlugin(compiler, { enableProdDevTools: true });
+  await installSassPlugin(bundler);
+  await installVuePlugin(bundler, { enableProdDevTools: true });
 
-  const out = await compiler.compile()
+  const out = await bundler.build()
     .catch((err: Error & { errors?: (PartialMessage | Error)[] }) => {
-      console.error('Compile error:', err.errors);
-      log('❌ Compile error. ' + err.message);
+      console.error('Build error:', err.errors);
+      log('❌ Build error. ' + err.message);
       err.errors?.forEach((e, i) => {
         let msg = e instanceof Error ? e.message : `${e.text}\n${e.location?.file}:${e.location?.line}:${e.location?.column}`;
         log(`(${i + 1}) ${msg}`);
       });
       throw err
     })
-  log('🎉 compiled', out);
+  log('🎉 built', out);
 
 
-  // insert compiled css
+  // insert css
   const style = document.createElement('style');
   document.head.appendChild(style);
   style.textContent = out.css;
 
-  // run compiled js
+  // run built js
   const fn = new Function(wrapCommonJS(out.js));
   fn();
 

@@ -72,7 +72,7 @@ export type CompilationFailureResponse = {
 };
 
 export type CompilationSuccessResponse = {
-  result: Awaited<ReturnType<BundlerInBrowser['compile']>>
+  result: Awaited<ReturnType<BundlerInBrowser['build']>>
   /** wrapped by wrapCommonJS */
   wrappedJs: string
 };

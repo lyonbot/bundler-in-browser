@@ -1,6 +1,6 @@
 import { stringHash } from 'yon-utils';
 import * as compiler from 'vue/compiler-sfc';
-import { ElementTypes, NodeTypes, type Position } from '@vue/compiler-core';
+import { type Position } from '@vue/compiler-core';
 import type { BundlerInBrowser } from "../BundlerInBrowser.js";
 import type esbuild from "esbuild-wasm";
 import path from "path";

@@ -49,9 +49,9 @@ const fs = Volume.fromJSON({
 const bundler = new BundlerInBrowser(fs);
 await bundler.initialize();
 
-// Compile your code
-// it throws with { errors } if compilation failed
-const out = await bundler.compile({
+// Build your code
+// it throws with { errors } if building failed
+const out = await bundler.build({
   entrypoint: "/src/index.js",
 });
 
@@ -72,19 +72,19 @@ if (out.css) {
 The bundling process happens in three stages:
 
 1. **Bundle User Code** (`bundleUserCode`)
-   - Compiles and bundles user code
-   - Collects npm dependencies
-   - Outputs a CommonJS module
+   - Build, compile and bundle user code
+   - Collect npm dependencies
+   - Output a CommonJS module
 
 2. **Bundle Vendor** (`bundleVendor`)
-   - Installs required npm packages
-   - Creates a vendor bundle (similar to DLL)
+   - Install required npm packages
+   - Create a vendor bundle (similar to DLL)
 
 3. **Concat Results** (`concatUserCodeAndVendors`)
-   - Combines user code and vendor bundle
-   - Produces final JS and CSS output
+   - Combine user code and vendor bundle
+   - Produce final JS and CSS output
 
-The `compile()` method automatically runs all three stages. For more control, you can use `bundler.bundleUserCode()` to only run the first stage and inspect required dependencies.
+The `build()` method automatically runs all three stages. For more control, you can use `bundler.bundleUserCode()` to only run the first stage and inspect required dependencies.
 
 ## Plugins
 
@@ -151,7 +151,7 @@ You can configure it with the following options:
   bundler.npm.options.registryUrl = "https://mirrors.cloud.tencent.com/npm";
   ```
 
-- **Prevent Installing Specific Packages**: (works with compiler's [external] option)
+- **Prevent Installing Specific Packages**: - works with `bundler.build()` [external] option
 
   ```js
   bundler.npm.options.blocklist = [
