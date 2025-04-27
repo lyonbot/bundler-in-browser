@@ -11,10 +11,10 @@ import installTailwindPlugin from "@bundler-in-browser/tailwindcss";
 import type { PartialMessage } from "esbuild-wasm";
 import { fsData } from "../../fsData";
 import {
-  isCompilationRequest,
+  isBuildRequest,
   newWorkerReadyMessage,
   workerSourceMarker,
-  type CompilationSuccessResponse,
+  type BuildSuccessResponse,
   type NPMProgressMessage,
   type WorkerLogMessage,
 } from "./common";
@@ -66,7 +66,7 @@ async function main() {
 
   // ready to compile
   self.addEventListener("message", async ({ data }) => {
-    if (!isCompilationRequest(data)) return;
+    if (!isBuildRequest(data)) return;
     fs.fromJSON(data.files);
 
     await bundler
@@ -74,7 +74,7 @@ async function main() {
         entrypoint: '/src/index.js',
       })
       .then((result) => {
-        const message: CompilationSuccessResponse = {
+        const message: BuildSuccessResponse = {
           result,
           wrappedJs: wrapCommonJS(result.js),
         };

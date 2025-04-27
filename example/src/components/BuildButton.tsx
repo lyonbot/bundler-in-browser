@@ -1,17 +1,17 @@
 import { useAtomValue } from "jotai";
 import React, { memo, useContext, useEffect, useRef } from "react";
 import { FileSystemContext } from "../contexts/FileSystemContext";
-import { useCompilerService } from "../services/compiler";
+import { useBundlerService } from "../services/bundler";
 import { clsx, MOD_KEY_LABEL } from "yon-utils";
 import styles from "../styles/BuildButton.module.scss";
 
 function StartBuildButton() {
-  const compilerService = useCompilerService();
+  const bundlerService = useBundlerService();
   const { files } = useContext(FileSystemContext);
-  const isBuilding = useAtomValue(compilerService.isCompilingAtom);
+  const isBuilding = useAtomValue(bundlerService.isBuildingAtom);
 
   const doBuild = useRef<() => void>(null as any);
-  doBuild.current = () => compilerService.build({ ...files });
+  doBuild.current = () => bundlerService.build({ ...files });
 
   useEffect(() => {
     setTimeout(() => doBuild.current(), 100);

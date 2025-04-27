@@ -3,17 +3,17 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { FileSystemProvider } from './contexts/FileSystemContext';
 
-import { CompilerService, CompilerServiceProvider } from './services/compiler';
+import { BundlerService, BundlerServiceProvider } from './services/bundler';
 
 const root = ReactDOM.createRoot(document.getElementById('root')!);
-const compilerService = new CompilerService();
+const bundlerService = new BundlerService();
 
 root.render(
   <React.StrictMode>
-    <CompilerServiceProvider service={compilerService}>
+    <BundlerServiceProvider service={bundlerService}>
       <FileSystemProvider>
         <App />
       </FileSystemProvider>
-    </CompilerServiceProvider>
+    </BundlerServiceProvider>
   </React.StrictMode>
 );
