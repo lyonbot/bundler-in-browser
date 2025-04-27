@@ -43,6 +43,13 @@ async function main() {
 
   // initialize
 
+  bundler.npm.options.blocklist = [
+    '@vue/compiler-core',
+    '@vue/compiler-dom',
+    '@vue/compiler-sfc',
+    '@vue/server-renderer',
+  ]
+
   await bundler.initialize({
     esbuildWasmURL: esbuildWasmURL,
   });

@@ -30,10 +30,9 @@ export namespace BundlerInBrowser {
     /** 
      * exclude dependencies from bundle.
      * 
-     * - `"@foo/bar"` contains `@foo/bar/baz.js`
-     * - you can use wildcards like `"*.png"`
-     * - `/^vue$/` will NOT match `/vue/dist/vue.esm-bundler.js`
-     * 
+     * - string `"@foo/bar"` also matches `@foo/bar/baz.js`
+     * - string supports wildcards like `"*.png"`
+     * - regexp `/^vue$/` will NOT match `vue/dist/vue.esm-bundler.js`
      * 
      */
     external?: (string | RegExp)[];

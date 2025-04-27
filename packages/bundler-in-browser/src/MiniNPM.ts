@@ -1,6 +1,6 @@
 import path from "path";
 import TarStream from 'tar-stream';
-import { rethrowWithPrefix, makeParallelTaskMgr, memoAsync, toPairs } from "./utils.js";
+import { rethrowWithPrefix, makeParallelTaskMgr, memoAsync, toPairs, listToTestFn } from "./utils.js";
 import semver from "semver";
 import { EventEmitter } from "./EventEmitter.js";
 import type { BundlerInBrowser } from "./BundlerInBrowser.js";
@@ -11,6 +11,7 @@ export namespace MiniNPM {
     nodeModulesDir?: string;
     useJSDelivrToQueryVersions?: boolean;
     concurrency?: number;
+    blocklist?: (string | RegExp)[]; // packages won't be installed
   }
 
   export interface PkgIndex {
@@ -80,6 +81,7 @@ export class MiniNPM {
       nodeModulesDir: '/node_modules',
       useJSDelivrToQueryVersions: false,
       concurrency: 5,
+      blocklist: [],
       ...options,
     };
   }
@@ -116,7 +118,11 @@ export class MiniNPM {
 
     const cachedSemverResult = {} as Record<string, string | null>; // { "foobar@^1.2.3": "1.3.0" }
 
+    const isBlockedPackage = listToTestFn(this.options.blocklist);
+
     const handleDep = async (name: string, versionRange: string, dependentId: string) => {
+      if (isBlockedPackage(name)) return;
+
       const event: MiniNPM.ProgressEvent = {
         type: 'progress',
         stage: 'fetch-metadata',

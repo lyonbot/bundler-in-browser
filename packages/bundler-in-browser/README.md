@@ -131,13 +131,40 @@ await installVuePlugin(bundler, {
 
 ### NPM Configuration
 
-- **Custom Package Versions**: Create a `/package.json` to specify dependency versions
-- **Fast Installation**: Uses built-in MiniNPM with caching for quick dependency installation
-- **Custom Registry**: Change the npm registry:
+The built-in NPM client can install packages automatically. It works with the built-in resolver, with dedicated directory structure under-the-hood.
+
+You can configure it with the following options:
+
+- Create a `/package.json` to **specify package versions**
+
+  ```json
+  {
+    "dependencies": {
+      "canvas-confetti": "^1.5.1"
+    }
+  }
+  ```
+
+- **Custom npm Registry**: 
+
   ```js
   bundler.npm.options.registryUrl = "https://mirrors.cloud.tencent.com/npm";
   ```
+
+- **Prevent Installing Specific Packages**: (works with compiler's [external] option)
+
+  ```js
+  bundler.npm.options.blocklist = [
+    '@vue/compiler-core',
+    '@vue/compiler-dom',
+    '@vue/compiler-sfc',
+    '@vue/server-renderer',
+    // support RegExp too:   /^@vue\/compiler-.*$/
+  ];
+  ```
+
 - **Progress Events**: Monitor installation progress:
+
   ```js
   bundler.events.on("npm:progress", e => console.log("[npm]", e));
   bundler.events.on("npm:install:error", (event) => console.log("[npm] install failed", event.errors));
