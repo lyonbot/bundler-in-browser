@@ -1,11 +1,13 @@
-import { memfs } from 'memfs';
+import { fs, InMemory } from '@zenfs/core';
 import { describe, expect, it } from 'vitest';
 import { MiniNPM } from '../src/MiniNPM.js';
 import { hookMiniNpm } from './testutil.js';
 
 describe('npm', () => {
   it('works', async () => {
-    const { fs } = memfs();
+    fs.umount('/')
+    fs.mount('/', InMemory.create({}));
+
     const npm = new MiniNPM(fs);
     const hook = hookMiniNpm(npm);
 

@@ -1,4 +1,5 @@
-import { Volume } from "memfs";
+import { fs, InMemory } from "@zenfs/core";
+import { dirname } from "path";
 import dayjs from "dayjs";
 import esbuildWasmURL from "esbuild-wasm/esbuild.wasm?url";
 import {
@@ -24,7 +25,10 @@ main().catch((err) => {
   self.postMessage(newWorkerReadyMessage(err));
 });
 async function main() {
-  const fs = Volume.fromJSON(fsData);
+  Object.entries(fsData).forEach(([path, content]) => {
+    fs.mkdirSync(dirname(path), { recursive: true });
+    fs.writeFileSync(path, content)
+  });
   const bundler = new BundlerInBrowser(fs);
 
   // setup event listeners
@@ -67,7 +71,14 @@ async function main() {
   // ready to compile
   self.addEventListener("message", async ({ data }) => {
     if (!isBuildRequest(data)) return;
-    fs.fromJSON(data.files);
+
+    // reset fs
+    fs.umount('/')
+    fs.mount('/', InMemory.create({}));
+    Object.entries(data.files).forEach(([path, content]) => {
+      fs.mkdirSync(dirname(path), { recursive: true });
+      fs.writeFileSync(path, content);
+    });
 
     await bundler
       .build({

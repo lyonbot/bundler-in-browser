@@ -70,4 +70,4 @@ Handles the actual building process:
 - Initializes the bundler with necessary plugins (Sass, Vue)
 - Sets up event listeners for building progress
 - Processes build requests and returns results
-- Uses memfs for in-memory file system operations
+- Uses @zenfs/core for in-memory file system operations

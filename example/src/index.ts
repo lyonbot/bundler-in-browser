@@ -1,4 +1,5 @@
-import { Volume } from "memfs";
+import { fs } from "@zenfs/core";
+import { dirname } from "path";
 import dayjs from "dayjs";
 import esbuildWasmURL from "esbuild-wasm/esbuild.wasm?url";
 import { BundlerInBrowser, installSassPlugin, installVuePlugin, wrapCommonJS } from "bundler-in-browser";
@@ -6,16 +7,9 @@ import { fsData } from "./fsData.js";
 
 import type { PartialMessage } from 'esbuild-wasm'
 
-const fsRaw = Volume.fromJSON(fsData);
-const fs = new Proxy({} as typeof fsRaw, {
-  get(target: any, prop) {
-    let raw = target[prop];
-    if (raw) return raw;
-
-    let fromFs = (fsRaw as any)[prop]
-    if (typeof fromFs === "function") fromFs = fromFs.bind(fsRaw);
-    return fromFs
-  },
+Object.entries(fsData).forEach(([path, content]) => {
+  fs.mkdirSync(dirname(path), { recursive: true });
+  fs.writeFileSync(path, content);
 })
 
 // @ts-ignore

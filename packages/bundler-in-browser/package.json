@@ -55,17 +55,17 @@
     "sass": {
       "optional": true
     },
-    "memfs": {
+    "vue": {
       "optional": true
     },
-    "vue": {
+    "@zenfs/core": {
       "optional": true
     }
   },
   "peerDependencies": {
-    "memfs": "^4.9.3",
     "sass": "^1.77.8",
-    "vue": "^3.2.14"
+    "vue": "^3.2.14",
+    "@zenfs/core": "^2.2.0"
   },
   "dependencies": {
     "buffer": "^6.0.3",
@@ -83,8 +83,8 @@
     "@types/semver": "^7.7.0",
     "@types/tar-stream": "^3.1.3",
     "@vue/compiler-core": "^3.5.13",
+    "@zenfs/core": "^2.2.0",
     "enhanced-resolve": "^5.18.1",
-    "memfs": "^4.17.0",
     "postcss": "^8.5.3",
     "sass": "^1.86.0",
     "tar-stream": "^3.1.7",

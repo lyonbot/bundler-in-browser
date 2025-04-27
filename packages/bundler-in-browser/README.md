@@ -19,7 +19,7 @@ npm install bundler-in-browser
 
 # Optional but recommended for virtual filesystem support
 # or you can implement the `BundlerInBrowser.IFs` interface
-npm install memfs
+npm install @zenfs/core
 ```
 
 ## Quick Start
@@ -28,22 +28,21 @@ Here's a simple example that bundles and runs code with a third-party package:
 
 ```ts
 import { BundlerInBrowser, wrapCommonJS } from "bundler-in-browser";
-import { Volume } from "memfs";
+import { fs } from "@zenfs/core";
 
 // Create a virtual filesystem with your source code
-const fs = Volume.fromJSON({
-  "/src/index.js": `
-    import confetti from "canvas-confetti";
+fs.mkdirSync("/src", { recursive: true });
+fs.writeFileSync("/src/index.js", `
+  import confetti from "canvas-confetti";
 
-    confetti();
-    setInterval(() => { confetti() }, 3000);
+  confetti();
+  setInterval(() => { confetti() }, 3000);
 
-    const elt = document.createElement('h1');
-    elt.textContent = 'BundlerInBrowser! Works!';
-    elt.style.cssText = 'text-align: center; font-size: 32px; margin-top: 30vh;';
-    document.body.appendChild(elt);
-  `,
-});
+  const elt = document.createElement('h1');
+  elt.textContent = 'BundlerInBrowser! Works!';
+  elt.style.cssText = 'text-align: center; font-size: 32px; margin-top: 30vh;';
+  document.body.appendChild(elt);
+`);
 
 // Initialize the bundler
 const bundler = new BundlerInBrowser(fs);
