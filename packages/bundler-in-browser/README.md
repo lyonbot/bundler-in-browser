@@ -19,7 +19,7 @@ npm install bundler-in-browser
 
 # Optional but recommended for virtual filesystem support
 # or you can implement the `BundlerInBrowser.IFs` interface
-npm install memfs
+npm install @zenfs/core
 ```
 
 ## Quick Start
@@ -28,30 +28,29 @@ Here's a simple example that bundles and runs code with a third-party package:
 
 ```ts
 import { BundlerInBrowser, wrapCommonJS } from "bundler-in-browser";
-import { Volume } from "memfs";
+import { fs } from "@zenfs/core";
 
 // Create a virtual filesystem with your source code
-const fs = Volume.fromJSON({
-  "/src/index.js": `
-    import confetti from "canvas-confetti";
+fs.mkdirSync("/src", { recursive: true });
+fs.writeFileSync("/src/index.js", `
+  import confetti from "canvas-confetti";
 
-    confetti();
-    setInterval(() => { confetti() }, 3000);
+  confetti();
+  setInterval(() => { confetti() }, 3000);
 
-    const elt = document.createElement('h1');
-    elt.textContent = 'BundlerInBrowser! Works!';
-    elt.style.cssText = 'text-align: center; font-size: 32px; margin-top: 30vh;';
-    document.body.appendChild(elt);
-  `,
-});
+  const elt = document.createElement('h1');
+  elt.textContent = 'BundlerInBrowser! Works!';
+  elt.style.cssText = 'text-align: center; font-size: 32px; margin-top: 30vh;';
+  document.body.appendChild(elt);
+`);
 
 // Initialize the bundler
 const bundler = new BundlerInBrowser(fs);
 await bundler.initialize();
 
-// Compile your code
-// it throws with { errors } if compilation failed
-const out = await bundler.compile({
+// Build your code
+// it throws with { errors } if building failed
+const out = await bundler.build({
   entrypoint: "/src/index.js",
 });
 
@@ -72,19 +71,19 @@ if (out.css) {
 The bundling process happens in three stages:
 
 1. **Bundle User Code** (`bundleUserCode`)
-   - Compiles and bundles user code
-   - Collects npm dependencies
-   - Outputs a CommonJS module
+   - Build, compile and bundle user code
+   - Collect npm dependencies
+   - Output a CommonJS module
 
 2. **Bundle Vendor** (`bundleVendor`)
-   - Installs required npm packages
-   - Creates a vendor bundle (similar to DLL)
+   - Install required npm packages
+   - Create a vendor bundle (similar to DLL)
 
 3. **Concat Results** (`concatUserCodeAndVendors`)
-   - Combines user code and vendor bundle
-   - Produces final JS and CSS output
+   - Combine user code and vendor bundle
+   - Produce final JS and CSS output
 
-The `compile()` method automatically runs all three stages. For more control, you can use `bundler.bundleUserCode()` to only run the first stage and inspect required dependencies.
+The `build()` method automatically runs all three stages. For more control, you can use `bundler.bundleUserCode()` to only run the first stage and inspect required dependencies.
 
 ## Plugins
 
@@ -131,13 +130,40 @@ await installVuePlugin(bundler, {
 
 ### NPM Configuration
 
-- **Custom Package Versions**: Create a `/package.json` to specify dependency versions
-- **Fast Installation**: Uses built-in MiniNPM with caching for quick dependency installation
-- **Custom Registry**: Change the npm registry:
+The built-in NPM client can install packages automatically. It works with the built-in resolver, with dedicated directory structure under-the-hood.
+
+You can configure it with the following options:
+
+- Create a `/package.json` to **specify package versions**
+
+  ```json
+  {
+    "dependencies": {
+      "canvas-confetti": "^1.5.1"
+    }
+  }
+  ```
+
+- **Custom npm Registry**: 
+
   ```js
   bundler.npm.options.registryUrl = "https://mirrors.cloud.tencent.com/npm";
   ```
+
+- **Prevent Installing Specific Packages**: - works with `bundler.build()` [external] option
+
+  ```js
+  bundler.npm.options.blocklist = [
+    '@vue/compiler-core',
+    '@vue/compiler-dom',
+    '@vue/compiler-sfc',
+    '@vue/server-renderer',
+    // support RegExp too:   /^@vue\/compiler-.*$/
+  ];
+  ```
+
 - **Progress Events**: Monitor installation progress:
+
   ```js
   bundler.events.on("npm:progress", e => console.log("[npm]", e));
   bundler.events.on("npm:install:error", (event) => console.log("[npm] install failed", event.errors));

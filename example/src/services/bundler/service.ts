@@ -1,13 +1,13 @@
 import { atom, createStore } from "jotai";
-import CompilerWorker from "./compiler.worker?worker";
+import CompilerWorker from "./bundler.worker?worker";
 import {
   isNPMProgressMessage,
   isWorkerLogMessage,
   isWorkerReadyMessage,
   workerSourceMarker,
-  type CompilationRequest,
-  type CompilationResponse,
-  type CompilationSuccessResponse,
+  type BuildRequest,
+  type BuildResponse,
+  type BuildSuccessResponse,
   type WorkerLogMessage,
 } from "./common";
 import { makePromise } from "yon-utils";
@@ -17,7 +17,7 @@ import { BundlerInBrowser, MiniNPM } from "bundler-in-browser";
  * Service class handling compilation operations using Web Workers
  * Manages the compilation process and maintains the worker's state
  */
-export class CompilerService {
+export class BundlerService {
   /** Web Worker instance for handling compilation tasks */
   private worker?: Worker;
   private workerLoadingPromise?: Promise<void>;
@@ -26,14 +26,14 @@ export class CompilerService {
   store = createStore();
 
   isReadyAtom = atom(false);
-  isCompilingAtom = atom(false);
+  isBuildingAtom = atom(false);
   npmInstallProgressAtom = atom<MiniNPM.ProgressEvent | null>(null); // only while npm installing
   logsAtom = atom<WorkerLogMessage[]>([]);
-  resultAtom = atom<CompilationSuccessResponse | null>(null); // last successful compilation result
+  resultAtom = atom<BuildSuccessResponse | null>(null); // last successful compilation result
   errorsAtom = atom<any[]>([]); // last compilation errors
 
   /**
-   * Initializes the CompilerService and sets up the worker
+   * Initializes the BundlerService and sets up the worker
    */
   constructor() {
     this.resetWorker(); // initialize the worker for the first time
@@ -50,7 +50,7 @@ export class CompilerService {
     const worker = new CompilerWorker();
 
     this.store.set(this.isReadyAtom, false);
-    this.store.set(this.isCompilingAtom, false);
+    this.store.set(this.isBuildingAtom, false);
     this.worker = worker;
 
     const promise = makePromise<void>();
@@ -95,10 +95,10 @@ export class CompilerService {
    * @param {Object} files - Key-value pairs of file paths and their contents
    * @param {string} files[path] - Content of the file at the specified path
    */
-  async compile(files: { [path: string]: string }) {
+  async build(files: { [path: string]: string }) {
     const { port1, port2 } = new MessageChannel();
-    const message: CompilationRequest = {
-      type: "compile",
+    const message: BuildRequest = {
+      type: 'build',
       target: workerSourceMarker,
       files,
       port: port2,
@@ -108,18 +108,18 @@ export class CompilerService {
     await this.workerLoadingPromise;
 
     // prevent multiple compilations
-    if (this.store.get(this.isCompilingAtom)) return;
+    if (this.store.get(this.isBuildingAtom)) return;
 
-    this.store.set(this.isCompilingAtom, true);
+    this.store.set(this.isBuildingAtom, true);
     this.worker!.postMessage(message, [port2]);
 
-    const data = await new Promise<CompilationResponse>((resolve) => {
-      port1.onmessage = (e: MessageEvent<CompilationResponse>) => {
+    const data = await new Promise<BuildResponse>((resolve) => {
+      port1.onmessage = (e: MessageEvent<BuildResponse>) => {
         resolve(e.data);
       };
     });
 
-    this.store.set(this.isCompilingAtom, false);
+    this.store.set(this.isBuildingAtom, false);
     if ("result" in data) {
       this.store.set(this.resultAtom, data);
       this.store.set(this.errorsAtom, []);

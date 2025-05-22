@@ -1,6 +1,6 @@
 import React, { memo, useEffect } from "react";
 import styles from "../styles/NPMProgressView.module.scss";
-import { useCompilerService } from "../services/compiler";
+import { useBundlerService } from "../services/bundler";
 import { useAtomValue } from "jotai";
 import type { PartialMessage } from "esbuild-wasm";
 
@@ -9,18 +9,18 @@ interface PreviewProps {
 }
 
 const NPMProgressView = memo(() => {
-  const compilerService = useCompilerService();
-  const isCompilerReady = useAtomValue(compilerService.isReadyAtom);
-  const isCompiling = useAtomValue(compilerService.isCompilingAtom);
-  const npmProgress = useAtomValue(compilerService.npmInstallProgressAtom);
+  const bundlerService = useBundlerService();
+  const isBundlerReady = useAtomValue(bundlerService.isReadyAtom);
+  const isBuilding = useAtomValue(bundlerService.isBuildingAtom);
+  const npmProgress = useAtomValue(bundlerService.npmInstallProgressAtom);
 
-  if (!isCompilerReady) {
+  if (!isBundlerReady) {
     return <div className={styles.progressContainer}>
       <div className={styles.packageId}>Loading Builder-In-Browser...</div>
     </div>
   }
 
-  if (isCompiling) {
+  if (isBuilding) {
     return <div className={styles.progressContainer}>
       {
         npmProgress ? <>
@@ -42,14 +42,14 @@ const NPMProgressView = memo(() => {
   return null
 })
 
-const CompileErrorView = memo((props: Pick<PreviewProps, 'onFileSelect'>) => {
-  const compilerService = useCompilerService();
+const BuildErrorView = memo((props: Pick<PreviewProps, 'onFileSelect'>) => {
+  const bundlerService = useBundlerService();
 
-  const isCompiling = useAtomValue(compilerService.isCompilingAtom)
-  const errors = useAtomValue(compilerService.errorsAtom);
+  const isBuilding = useAtomValue(bundlerService.isBuildingAtom)
+  const errors = useAtomValue(bundlerService.errorsAtom);
   const [shown, setShown] = React.useState(false);
 
-  useEffect(() => { if (!isCompiling) setShown(true) }, [isCompiling]) // once compile done, show!
+  useEffect(() => { if (!isBuilding) setShown(true) }, [isBuilding]) // once built, show!
 
   if (!shown || !errors || errors.length === 0) return null;
 
@@ -83,9 +83,9 @@ const CompileErrorView = memo((props: Pick<PreviewProps, 'onFileSelect'>) => {
 
 export const Preview: React.FC<PreviewProps> = ({ onFileSelect }) => {
   const iframeRef = React.useRef<HTMLIFrameElement>(null);
-  const compilerService = useCompilerService();
+  const bundlerService = useBundlerService();
 
-  const result = useAtomValue(compilerService.resultAtom);
+  const result = useAtomValue(bundlerService.resultAtom);
   React.useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe || !result) return;
@@ -124,7 +124,7 @@ export const Preview: React.FC<PreviewProps> = ({ onFileSelect }) => {
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
       />
       <NPMProgressView />
-      <CompileErrorView onFileSelect={onFileSelect} />
+      <BuildErrorView onFileSelect={onFileSelect} />
     </div>
   );
 };

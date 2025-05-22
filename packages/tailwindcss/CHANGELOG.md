@@ -1,5 +1,15 @@
 # @bundler-in-browser/tailwindcss
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [de50aeb]
+- Updated dependencies [688ce60]
+- Updated dependencies [fd6dea4]
+- Updated dependencies [19b1452]
+  - bundler-in-browser@0.2.0
+
 ## 0.1.2
 
 ### Patch Changes

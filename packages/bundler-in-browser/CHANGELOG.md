@@ -1,5 +1,17 @@
 # bundler-in-browser
 
+## 0.2.0
+
+### Minor Changes
+
+- 19b1452: refactor: compile -> build
+
+### Patch Changes
+
+- de50aeb: add blocklist the npm option
+- 688ce60: fix npm duplicate link err
+- fd6dea4: recommend @zenfs/core instead of memfs - better performance
+
 ## 0.1.7
 
 ### Patch Changes

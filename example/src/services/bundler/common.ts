@@ -50,29 +50,29 @@ export const isNPMProgressMessage = (e: any): e is NPMProgressMessage => e && e.
 
 // -----------------------------------------------------------------------------
 // 
-// CompilationRequest & CompilationResponse
+// BuildRequest & CompilationResponse
 //
 
-export interface CompilationRequest {
-  type: 'compile';
+export interface BuildRequest {
+  type: 'build';
   target: typeof workerSourceMarker;
 
   files: { [path: string]: string };
   port: MessagePort; // to send CompilationResponse
 }
 
-export const isCompilationRequest = (e: any): e is CompilationRequest => e && e.type === 'compile' && e.target === workerSourceMarker;
+export const isBuildRequest = (e: any): e is BuildRequest => e && e.type === 'build' && e.target === workerSourceMarker;
 
-export type CompilationResponse =
-  | CompilationFailureResponse
-  | CompilationSuccessResponse
+export type BuildResponse =
+  | BuildFailureResponse
+  | BuildSuccessResponse
 
-export type CompilationFailureResponse = {
+export type BuildFailureResponse = {
   errors: any[]
 };
 
-export type CompilationSuccessResponse = {
-  result: Awaited<ReturnType<BundlerInBrowser['compile']>>
+export type BuildSuccessResponse = {
+  result: Awaited<ReturnType<BundlerInBrowser['build']>>
   /** wrapped by wrapCommonJS */
   wrappedJs: string
 };

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, memo, useMemo } from 'react';
-import { useCompilerService } from '../services/compiler';
+import { useBundlerService } from '../services/bundler';
 import { useAtomValue } from 'jotai';
 import dayjs from 'dayjs';
 
@@ -53,8 +53,8 @@ const WithAutoFileLink = memo((props: { text: string } & OutputPanelProps) => {
 export const OutputPanel: React.FC<OutputPanelProps> = ({ onFileSelect }) => {
   const preRef = useRef<HTMLPreElement>(null);
 
-  const compilerService = useCompilerService();
-  const logs = useAtomValue(compilerService.logsAtom);
+  const bundlerService = useBundlerService();
+  const logs = useAtomValue(bundlerService.logsAtom);
 
   useEffect(() => {
     // 自动滚动到底部
@@ -94,14 +94,14 @@ export const OutputPanel: React.FC<OutputPanelProps> = ({ onFileSelect }) => {
             cursor: 'pointer'
           }}
           onClick={() => {
-            compilerService.clearLogs();
+            bundlerService.clearLogs();
           }}
         >
           Clear
         </button>
       </div>
       <pre
-        id="compile-log"
+        id="build-log"
         ref={preRef}
         style={{
           margin: 0,

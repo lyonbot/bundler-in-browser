@@ -5,7 +5,7 @@ import { Editor } from "./components/Editor";
 import { Preview } from "./components/Preview";
 import { OutputPanel } from "./components/OutputPanel";
 import { FileSystemContext } from "./contexts/FileSystemContext";
-import CompileButton from "./components/CompileButton";
+import BuildButton from "./components/BuildButton";
 
 import styles from "./styles/App.module.scss";
 
@@ -86,7 +86,7 @@ const App: React.FC = () => {
       <div className={styles.columns}>
         <ResizablePanel className="panel-left" initialWidth="200px">
           <div style={{ padding: 8, background: '#222', border: '1px solid #ccc' }}>
-            <CompileButton />
+            <BuildButton />
           </div>
           <FileExplorer
             activeTab={activeTab}

@@ -6,19 +6,19 @@ A powerful in-browser compilation service that leverages 🧑‍🔧 Web Workers
 
 ```tsx
 // 1. Initialize the service
-const compilerService = new CompilerService();
+const bundlerService = new BundlerService();
 
 // 2. Wrap your app with the provider
-<CompilerServiceProvider service={compilerService}>
+<BundlerServiceProvider service={bundlerService}>
   <YourApp />
-</CompilerServiceProvider>
+</BundlerServiceProvider>
 
 // 3. Use the service in your components
 function YourComponent() {
-  const service = useCompilerService();
+  const service = useBundlerService();
 
   const isReady = useAtomValue(service.isReadyAtom);
-  const isCompiling = useAtomValue(service.isCompilingAtom);
+  const isBuilding = useAtomValue(service.isBuildingAtom);
   const lastResult = useAtomValue(service.resultAtom);
   const lastErrors = useAtomValue(service.errorsAtom);
   
@@ -39,7 +39,7 @@ function YourComponent() {
 
 The compiler service consists of four main components:
 
-### 1. CompilerService (index.tsx)
+### 1. BundlerService (index.tsx)
 
 The main service class that manages the compilation process and worker lifecycle:
 
@@ -51,23 +51,23 @@ The main service class that manages the compilation process and worker lifecycle
 Key states managed by the service:
 
 - `isReadyAtom`: Indicates if the worker is initialized and ready
-- `isCompilingAtom`: Shows current compilation status
+- `isBuildingAtom`: Shows current compilation status
 - `logsAtom`: Stores compilation logs
 - `resultAtom`: Stores the last successful compilation result
 - `errorsAtom`: Contains any compilation errors
 
-### 2. CompilerServiceContext (CompilerServiceContext.tsx)
+### 2. BundlerServiceContext (BundlerServiceContext.tsx)
 
 Provides React context integration:
 
-- `CompilerServiceProvider`: A component that provides both CompilerService and Jotai store context
-- `useCompilerService`: A hook to access the CompilerService instance within React components
+- `BundlerServiceProvider`: A component that provides both BundlerService and Jotai store context
+- `useBundlerService`: A hook to access the BundlerService instance within React components
 
-### 3. Worker Implementation (compiler.worker.ts)
+### 3. Worker Implementation (bundler.worker.ts)
 
-Handles the actual compilation process:
+Handles the actual building process:
 
 - Initializes the bundler with necessary plugins (Sass, Vue)
-- Sets up event listeners for compilation progress
-- Processes compilation requests and returns results
-- Uses memfs for in-memory file system operations
+- Sets up event listeners for building progress
+- Processes build requests and returns results
+- Uses @zenfs/core for in-memory file system operations

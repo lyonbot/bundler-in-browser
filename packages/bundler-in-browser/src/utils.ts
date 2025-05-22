@@ -189,3 +189,26 @@ export function rethrowWithPrefix(e: any, prefix: string): never {
   }
   throw new Error(`${prefix}: ${e?.message ?? e?.text ?? e}`, { cause: e });
 }
+
+export function listToTestFn(list: (string | RegExp)[]): (str: string) => boolean {
+  if (!Array.isArray(list)) list = [list];
+
+  const strSet = new Set<string>();
+  const regex: RegExp[] = [];
+
+  for (const item of list) {
+    if (typeof item === 'string') {
+      strSet.add(item);
+    } else if (item instanceof RegExp) {
+      regex.push(item);
+    }
+  }
+
+  if (!regex.length) return (str) => strSet.has(str);
+
+  return (str) => {
+    if (strSet.has(str)) return true;
+    for (const r of regex) if (r.test(str)) return true;
+    return false;
+  }
+}
