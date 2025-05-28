@@ -50,8 +50,8 @@ export default defineConfig({
     minify: !IS_DEVELOPMENT,
     rollupOptions: {
       external: [
-        ...Object.keys(packageJSON.dependencies),
-        ...Object.keys(packageJSON.peerDependencies),
+        ...Object.keys(packageJSON.dependencies || {}),
+        ...Object.keys(packageJSON.peerDependencies || {}),
       ]
     },
     lib: {
