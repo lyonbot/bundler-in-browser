@@ -51,6 +51,7 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "@bundler-in-browser/common": "workspace:^0.1.0",
     "@mhsdesign/jit-browser-tailwindcss": "^0.4.2",
     "autoprefixer": "^10.4.21",
     "bundler-in-browser": "workspace:*",

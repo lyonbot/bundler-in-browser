@@ -1,9 +1,9 @@
-import { createRequire } from 'module';
 import { defineConfig } from 'vite'
 import dts from 'vite-plugin-dts'
 
+import { commonResolveAliases } from '@bundler-in-browser/common/resolve-aliases.js';
 import packageJSON from './package.json' assert { type: 'json' };
-const require = createRequire(import.meta.url);
+
 const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
 
 export default defineConfig({
@@ -13,11 +13,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      'path': require.resolve('./src/dirty-stuff/path.cjs'),
+      ...commonResolveAliases,
       'stream': 'streamx',
-      'fs': require.resolve('./src/dirty-stuff/empty-object.cjs'),
-      'graceful-fs': require.resolve('./src/dirty-stuff/empty-object.cjs'),
-      'util': require.resolve('./src/dirty-stuff/util.js'),
     }
   },
   plugins: [dts({ rollupTypes: true })],
@@ -25,8 +22,8 @@ export default defineConfig({
     minify: !IS_DEVELOPMENT,
     rollupOptions: {
       external: [
-        ...Object.keys(packageJSON.dependencies),
-        ...Object.keys(packageJSON.peerDependencies),
+        ...Object.keys(packageJSON.dependencies || {}),
+        ...Object.keys(packageJSON.peerDependencies || {}),
         'vue/compiler-sfc',
       ]
     },

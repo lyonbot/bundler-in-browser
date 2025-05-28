@@ -88,6 +88,9 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0
     devDependencies:
+      '@bundler-in-browser/common':
+        specifier: workspace:^0.1.0
+        version: link:../common
       '@types/pako':
         specifier: ^2.0.3
         version: 2.0.3
@@ -137,8 +140,17 @@ importers:
         specifier: ^0.1.24
         version: 0.1.24
 
+  packages/common:
+    dependencies:
+      path-browserify:
+        specifier: ^1.0.1
+        version: 1.0.1
+
   packages/tailwindcss:
     devDependencies:
+      '@bundler-in-browser/common':
+        specifier: workspace:^0.1.0
+        version: link:../common
       '@mhsdesign/jit-browser-tailwindcss':
         specifier: ^0.4.2
         version: 0.4.2

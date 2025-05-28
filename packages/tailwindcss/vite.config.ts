@@ -1,13 +1,11 @@
-import { createRequire } from 'module';
 import { defineConfig } from 'vite';
 import { mkdir, writeFile, readFile } from 'fs/promises';
 import dts from 'vite-plugin-dts'
 
+import { aliasEmptyObject } from '@bundler-in-browser/common/resolve-aliases.js';
 import packageJSON from './package.json' assert { type: 'json' };
-const require = createRequire(import.meta.url);
-const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
 
-const nullobj = require.resolve('./src/dirty-stuff/empty-object.cjs')
+const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
 
 export default defineConfig({
   define: {
@@ -17,11 +15,11 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "postcss/lib/terminal-highlight": nullobj,
-      "source-map-js": nullobj,
-      "path": nullobj,
-      "url": nullobj,
-      "fs": nullobj,
+      "postcss/lib/terminal-highlight": aliasEmptyObject,
+      "source-map-js": aliasEmptyObject,
+      "path": aliasEmptyObject,
+      "url": aliasEmptyObject,
+      "fs": aliasEmptyObject,
     }
   },
   plugins: [
@@ -42,7 +40,7 @@ export default defineConfig({
           await writeFile(file, `import { tailwindGoods } from '../dist/index.js';\nexport default tailwindGoods.${name};\n`, 'utf-8');
         }
 
-        console.log('goods generated: ' + names);
+        console.log('tailwind extras generated: ' + names);
       },
     },
   ],

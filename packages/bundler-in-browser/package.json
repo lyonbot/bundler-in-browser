@@ -77,6 +77,7 @@
     "tiny-typed-emitter": "^2.1.0"
   },
   "devDependencies": {
+    "@bundler-in-browser/common": "workspace:^0.1.0",
     "@types/pako": "^2.0.3",
     "@types/path-browserify": "^1.0.3",
     "@types/semver": "^7.7.0",
