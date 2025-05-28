@@ -18,9 +18,14 @@ A powerful in-browser bundler that automatically installs npm packages, powered 
 npm install bundler-in-browser
 
 # Optional but recommended for virtual filesystem support
-# or you can implement the `BundlerInBrowser.IFs` interface
-npm install @zenfs/core
+npm install @zenfs/core path-browserify
 ```
+
+Then, configure your project, alias `path` to `path-browserify`:
+
+- **Vite**: open `vite.config.ts`, add `"path": "path-browserify"` into `resolve.alias`
+- **Webpack**: open `webpack.config.js`, add `"path": "path-browserify"` into `resolve.alias`
+- **Rollup**: refer to [@rollup/plugin-alias](https://www.npmjs.com/package/@rollup/plugin-alias)
 
 ## Quick Start
 
@@ -31,7 +36,7 @@ import { BundlerInBrowser, wrapCommonJS } from "bundler-in-browser";
 import { fs } from "@zenfs/core";
 
 // Create a virtual filesystem with your source code
-fs.mkdirSync("/src", { recursive: true });
+fs.mkdirSync("/src");
 fs.writeFileSync("/src/index.js", `
   import confetti from "canvas-confetti";
 
@@ -49,12 +54,13 @@ const bundler = new BundlerInBrowser(fs);
 await bundler.initialize();
 
 // Build your code
-// it throws with { errors } if building failed
+// if failed, may throw Error with { errors }
 const out = await bundler.build({
   entrypoint: "/src/index.js",
 });
 
-// Execute the bundled code
+// it returns { js, css } and the `js` is a CommonJS module
+// Execute the js (use `wrapCommonJS()` to convert CommonJS into IIFE function)
 const run = new Function(wrapCommonJS(out.js));
 run();
 

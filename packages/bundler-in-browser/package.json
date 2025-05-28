@@ -68,7 +68,6 @@
     "@zenfs/core": "^2.2.0"
   },
   "dependencies": {
-    "buffer": "^6.0.3",
     "esbuild-wasm": "^0.25.1",
     "events": "^3.3.0",
     "pako": "^2.1.0",

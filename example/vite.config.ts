@@ -16,13 +16,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      'stream': 'streamx',
-      assert: require.resolve('assert'),
-      buffer: require.resolve('buffer'),
-      path: require.resolve('path-browserify'),
-      process: require.resolve('process/browser'),
-      url: require.resolve('url'),
-      util: require.resolve('util'),
+      path: 'path-browserify',
     }
   },
 })
