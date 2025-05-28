@@ -75,7 +75,7 @@ export namespace BundlerInBrowser {
     npmRequired: Set<string>;
 
     /** full vendor paths imported by user code, eg `["vue", "lodash/debounce"]` */
-    vendorExports: Set<string>;
+    importedPaths: Set<string>;
 
     /** all actual-used dependencies that declared in `external` (the build options) */
     external: Set<string>;
@@ -92,12 +92,12 @@ export namespace BundlerInBrowser {
     css: string;
 
     /** all external dependencies, required by user code and vendor code */
-    external: Set<string>;
+    external: string[];
   }
 
   export type BuildResult
     = ConcatCodeResult
-    & Pick<BuildUserCodeResult, 'npmRequired' | 'vendorExports'>
+    & Pick<BuildUserCodeResult, 'npmRequired' | 'importedPaths'>
     & {
       /** 
        * the used vendor bundle.
@@ -110,7 +110,7 @@ export namespace BundlerInBrowser {
   export interface Events {
     'initialized': () => void;
     'build:start': () => void;
-    'build:usercode': (result: { npmRequired: Set<string>, vendorExports: Set<string>, external: Set<string> }) => void;
+    'build:usercode': (result: BundlerInBrowser.BuildUserCodeResult) => void;
     'build:vendor': (result: BundlerInBrowser.VendorBundleResult) => void;
     'npm:progress': (event: MiniNPM.ProgressEvent) => void;
     'npm:packagejson:update': (newPackageJson: any) => void;
@@ -263,7 +263,7 @@ export class BundlerInBrowser {
     await this.assertInitialized();
 
     const npmRequired = new Set<string>();
-    const vendorExports = new Set<string>();
+    const importedPaths = new Set<string>();
     const externalCollect = getExternalPlugin(opts.external);
 
     const npmCollectPlugin = (): esbuild.Plugin => {
@@ -275,7 +275,7 @@ export class BundlerInBrowser {
             let [packageName] = pathToNpmPackage(fullPath)
 
             npmRequired.add(packageName);
-            vendorExports.add(fullPath);
+            importedPaths.add(fullPath);
 
             return {
               path: fullPath,
@@ -332,7 +332,7 @@ export class BundlerInBrowser {
       js: userJs,
       css: userCss,
       npmRequired,
-      vendorExports,
+      importedPaths,
       external: externalCollect.collected,
       esbuildOutput: output,
     }
@@ -345,8 +345,13 @@ export class BundlerInBrowser {
    * - if `/package.json` exists, it will be used to specify dependencies version. ( the `npmRequired` doesn't include version number )
    */
   async bundleVendor(opts: {
+    /** not very useful, just a marker as-is in the VendorBundleResult */
     hash: string;
+
+    /** what npm packages to install */
     npmRequired: Set<string>;
+    
+    /** what module paths to export, from this vendor bundle */
     exports: Set<string>;
 
     external?: (string | RegExp)[];
@@ -513,8 +518,11 @@ export class BundlerInBrowser {
       userCode.css,
     ].join('\n')
 
-
-    return { js: finalJs, css: finalCss, external }
+    return {
+      js: finalJs,
+      css: finalCss,
+      external: setToSortedArray(external),
+    };
   }
 
   /** cached result of `bundleVendor()`, only for `build()` */
@@ -550,18 +558,14 @@ export class BundlerInBrowser {
     // stage 1: build user code, collect npm dependencies, yields CommonJS module
 
     const userCode = await this.bundleUserCode(opts || {});
-    this.events.emit('build:usercode', {
-      npmRequired: userCode.npmRequired,
-      vendorExports: userCode.vendorExports,
-      external: userCode.external
-    });
+    this.events.emit('build:usercode', userCode);
 
     // phase 2: bundle vendor, including npm install
     // (may be skipped, if dep not changed)
 
     const vendorHash = [
       /* vendor's import */ opts?.external?.join('|'),
-      /* vendor's exports */ setToSortedArray(userCode.vendorExports).join(','),
+      /* vendor's exports */ setToSortedArray(userCode.importedPaths).join(','),
       /* define */ Object.entries(opts?.define || {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join(';'),
     ].join('\n');
 
@@ -570,14 +574,14 @@ export class BundlerInBrowser {
       if (!prev) return false;
 
       const prevSet = new Set(prev);
-      return Array.from(userCode.vendorExports).every(dep => prevSet.has(dep));
+      return Array.from(userCode.importedPaths).every(dep => prevSet.has(dep));
     })();
     const vendorBundle = canReuseVendorBundle
       ? this.lastVendorBundle!
       : (this.lastVendorBundle = await this.bundleVendor({
         hash: vendorHash,
         npmRequired: userCode.npmRequired,
-        exports: userCode.vendorExports,
+        exports: userCode.importedPaths,
         define: opts?.define,
       }))
 
@@ -594,10 +598,10 @@ export class BundlerInBrowser {
       // from ConcatCodeResult
       js: final.js,
       css: final.css,
-      external,
+      external: setToSortedArray(external),
       // from userCode
       npmRequired: new Set(userCode.npmRequired),
-      vendorExports: new Set(userCode.vendorExports),
+      importedPaths: new Set(userCode.importedPaths),
       // from vendorBundle
       vendorBundle,
     }
