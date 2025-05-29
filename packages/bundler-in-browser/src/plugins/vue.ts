@@ -5,7 +5,6 @@ import type { BundlerInBrowser } from "../BundlerInBrowser.js";
 import type esbuild from "esbuild-wasm";
 import path from "path";
 import { memoAsync } from '../utils.js';
-import { processCSS } from './common.js';
 
 const COMP_IDENTIFIER = '__vue_component__';
 function getFullPath(args: esbuild.OnResolveArgs) {
@@ -187,8 +186,11 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           }))
         };
 
-        // return { contents: code, loader: 'css', pluginData: { ...args.pluginData } }
-        return await processCSS(build, args.path, code)
+        return await bundler.pluginUtils.applyPostProcessors(args, {
+          contents: code,
+          loader: 'css',
+          pluginData: { ...args.pluginData }
+        })
       })
 
       build.onLoad({ filter: /./, namespace: "sfc-script" }, async (args) => {
@@ -256,12 +258,12 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           codePrefix += '/** @jsx vueH */\n/** @jsxFrag vueFragment */\nimport { h as vueH, Fragment as vueFragment } from "vue";\n';
         }
 
-        return {
+        return await bundler.pluginUtils.applyPostProcessors(args, {
           contents: codePrefix + compiledScript.content + '\n\nexport default ' + COMP_IDENTIFIER,
           loader: esbuildLoader,
           watchFiles: [filename],
           pluginData: { ...args.pluginData }
-        }
+        })
       })
 
       build.onLoad({ filter: /.vue$/ }, async (args) => {
@@ -351,14 +353,14 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         if (hasTS) loader = 'ts';
         if (hasJSX) loader = (loader + 'x') as 'jsx' | 'tsx';
 
-        return {
+        return await bundler.pluginUtils.applyPostProcessors(args, {
           contents: outCodeParts.join('\n'),
           loader,
           watchFiles: [filename],
           pluginData: {
             vue: { descriptor, id, scopeId, expressionPlugins, toESBuildErrorCtx, esbuildLoader: loader, hasTS, hasJSX }
           }
-        }
+        })
       })
     }
   }

@@ -37,59 +37,71 @@ import { fs } from "@zenfs/core";
 
 // Create a virtual filesystem with your source code
 fs.mkdirSync("/src");
-fs.writeFileSync("/src/index.js", `
-  import confetti from "canvas-confetti";
+fs.writeFileSync(
+  "/src/index.js",
+  `
+    import confetti from "canvas-confetti";
 
-  confetti();
-  setInterval(() => { confetti() }, 3000);
+    confetti();
+    setInterval(() => { confetti() }, 3000);
 
-  const elt = document.createElement('h1');
-  elt.textContent = 'BundlerInBrowser! Works!';
-  elt.style.cssText = 'text-align: center; font-size: 32px; margin-top: 30vh;';
-  document.body.appendChild(elt);
-`);
+    const elt = document.createElement('h1');
+    elt.textContent = 'BundlerInBrowser! ' + FOO;
+    elt.style.cssText = 'text-align: center; font-size: 32px; margin-top: 30vh;';
+    document.body.appendChild(elt);
+  `
+);
 
 // Initialize the bundler
 const bundler = new BundlerInBrowser(fs);
 await bundler.initialize();
 
 // Build your code
+bundler.config.entrypoint = "/src/index.js";
+bundler.config.define.FOO = '"awesome!"'; // Define global constants
+
 // if failed, may throw Error with { errors }
-const out = await bundler.build({
-  entrypoint: "/src/index.js",
-});
+const buildResult = await bundler.build();
 
 // it returns { js, css } and the `js` is a CommonJS module
 // Execute the js (use `wrapCommonJS()` to convert CommonJS into IIFE function)
-const run = new Function(wrapCommonJS(out.js));
+const run = new Function(wrapCommonJS(buildResult.js));
 run();
 
 // Apply any generated CSS
-if (out.css) {
+if (buildResult.css) {
   const style = document.createElement("style");
-  style.textContent = out.css;
+  style.textContent = buildResult.css;
   document.head.appendChild(style);
 }
 ```
 
 ## How It Works
 
-The bundling process happens in three stages:
+When you call `bundler.build()`, it performs the following steps:
 
-1. **Bundle User Code** (`bundleUserCode`)
-   - Build, compile and bundle user code
-   - Collect npm dependencies
-   - Output a CommonJS module
+1. build & bundle user code, and collect and externalize all dependencies.
 
-2. **Bundle Vendor** (`bundleVendor`)
-   - Install required npm packages
-   - Create a vendor bundle (similar to DLL)
+   - collects all imported paths like `["canvas-confetti", "lodash/debounce"]`, excluding the blocked by `config.externals`
 
-3. **Concat Results** (`concatUserCodeAndVendors`)
-   - Combine user code and vendor bundle
-   - Produce final JS and CSS output
+   - output a CommonJS module. it may contains `require("some-dependency")`
 
-The `build()` method automatically runs all three stages. For more control, you can use `bundler.bundleUserCode()` to only run the first stage and inspect required dependencies.
+2. (if dependencies mismatch the cached vendor bundle)
+
+   1. install missing npm packages.
+
+   2. create vendor bundle, which exports all dependent module getters as a object, like
+
+      ```js
+      export const deps = {
+        "canvas-confetti": () => ...,
+        "lodash/debounce": () => ...,
+      };
+      ```
+
+3. concat user code and vendor bundle.
+
+   - the output javascript is in UMD format, so you can run it directly, or wrap into IIFE to retrieve the `exports` of user code.
 
 ## Plugins
 
@@ -125,14 +137,14 @@ await bundler.initialize();
 
 // Install Vue support with options
 await installVuePlugin(bundler, {
-  disableOptionsApi: false,  // Set true to reduce vendor bundle size
+  disableOptionsApi: false, // Set true to reduce vendor bundle size
   enableProdDevTools: false, // Set true if production build needs devtools
 });
 
 // Now you can compile .vue files
 ```
 
-## Advanced Usage
+## Caveats
 
 ### NPM Configuration
 
@@ -150,20 +162,20 @@ You can configure it with the following options:
   }
   ```
 
-- **Custom npm Registry**: 
+- **Custom npm Registry**:
 
   ```js
   bundler.npm.options.registryUrl = "https://mirrors.cloud.tencent.com/npm";
   ```
 
-- **Prevent Installing Specific Packages**: - works with `bundler.build()` [external] option
+- **Prevent Installing Specific Packages**: - please use it in conjunction with `bundler.config.externals`
 
   ```js
   bundler.npm.options.blocklist = [
-    '@vue/compiler-core',
-    '@vue/compiler-dom',
-    '@vue/compiler-sfc',
-    '@vue/server-renderer',
+    "@vue/compiler-core",
+    "@vue/compiler-dom",
+    "@vue/compiler-sfc",
+    "@vue/server-renderer",
     // support RegExp too:   /^@vue\/compiler-.*$/
   ];
   ```
@@ -171,7 +183,7 @@ You can configure it with the following options:
 - **Progress Events**: Monitor installation progress:
 
   ```js
-  bundler.events.on("npm:progress", e => console.log("[npm]", e));
+  bundler.events.on("npm:progress", (e) => console.log("[npm]", e));
   bundler.events.on("npm:install:error", (event) => console.log("[npm] install failed", event.errors));
   bundler.events.on("npm:install:done", () => console.log("[npm] install:done"));
   bundler.events.on("npm:packagejson:update", (newPackageJSON) => console.log("[newPackageJSON]", newPackageJSON));
@@ -179,7 +191,7 @@ You can configure it with the following options:
 
 ### Vendor Bundle Management
 
-Optimize performance by managing vendor bundles:
+Building vendor bundle is slow, so you can reuse it. It depends on `bundler.config` and dependencies of user code.
 
 ```js
 // Export vendor bundle for reuse

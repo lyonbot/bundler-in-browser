@@ -1,6 +1,6 @@
 import postcss from 'postcss';
 import { createTailwindcssPlugin, type Content, type TailwindConfig } from '@mhsdesign/jit-browser-tailwindcss'
-import { forPlugins, wrapCommonJS, type BundlerInBrowser } from 'bundler-in-browser';
+import { wrapCommonJS, type BundlerInBrowser } from 'bundler-in-browser';
 import type esbuild from 'esbuild-wasm';
 import autoprefixer from 'autoprefixer';
 
@@ -32,12 +32,31 @@ export default function installTailwindPlugin(bundler: BundlerInBrowser, options
   if (!rootDir) rootDir = '/';
   if (!rootDir.startsWith('/')) throw new Error('rootDir must start with /');
 
+  const processor = postcss();
+  bundler.config.postProcessors.push({
+    name: "tailwindcss",
+    test: /\.(s[ac]ss|css)([?!#].*)?$/i,
+    process: async (args, result) => {
+      const filePath = args.path;
+      const content = result.contents as string;
+
+      try {
+        const postcssResult = await processor.process(content, {
+          from: filePath,
+          map: { inline: false, annotation: false }
+        });
+        applyPostcssResult(postcssResult, filePath, result);
+      } catch (e) {
+        applyPostcssError(e, filePath, result);
+        throw new Error(`PostCSS error in ${filePath}`);
+      }
+    }
+  })
+
   const plugin: esbuild.Plugin = {
     name: "tailwindcss",
     setup(build) {
       const fs = bundler.fs;
-      const processor = postcss();
-      forPlugins.setPostcssProcessor(build, processor);
 
       build.onStart(async () => {
         await readyPromise;
@@ -102,4 +121,37 @@ export default function installTailwindPlugin(bundler: BundlerInBrowser, options
   }
 
   bundler.userCodePlugins.push(plugin);
+}
+
+function applyPostcssResult(postcssResult: postcss.Result, filePath: string, result: esbuild.OnLoadResult) {
+  result.contents = postcssResult.css;
+  result.warnings = postcssResult.warnings().map(w => ({
+    text: w.text,
+    location: {
+      file: filePath,
+      line: w.line,
+      column: w.column,
+    },
+    detail: w,
+  }))
+}
+
+function applyPostcssError(error: any, filePath: string, result: esbuild.OnLoadResult) {
+  const postcssError = error as {
+    name: string;
+    message: string;
+    reason: string;
+    file?: string;
+    line?: number;
+    column?: number;
+  };
+
+  result.errors = [{
+    text: `[PostCSS ${postcssError.name}] ${postcssError.message}`,
+    location: {
+      file: filePath,
+      line: postcssError.line,
+      column: postcssError.column,
+    }
+  }]
 }

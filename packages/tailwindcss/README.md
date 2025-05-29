@@ -28,19 +28,19 @@ await bundler.initialize();
 
 await installSassPlugin(bundler);
 await installTailwindPlugin(bundler, {
-  rootDir: '/src',
+  rootDir: "/src",
   // pattern: /\.(css|scss|html|vue|jsx?|tsx?|md$/,   // defaults
 
   // Your tailwind configuration
   tailwindConfig: {
     corePlugins: {
       preflight: false, // Example: disable Tailwind's reset
-    }
+    },
   },
 });
 ```
 
-And ensure your project contains a `/src/main.css` like this: 
+And ensure your project contains a `/src/main.css` like this:
 
 ```css
 @tailwind base;
@@ -51,56 +51,40 @@ And ensure your project contains a `/src/main.css` like this:
 And import it in the entry file:
 
 ```js
-// in /src/index.js -- or any other entry file
+// in /src/index.js
+
 import "./main.css";
 ```
 
+## Caveats
+
 ### Use tailwind.config.js
 
-> Note: this is not recommended, because we use `eval` to load the config file.
+For convenience, you can set `tailwindConfig: "/tailwind.config.js"`, but actually it's dangerous because we use `eval` to load it. And it can't load plugins.
 
-In the `installTailwindPlugin()` you can pass a file path to the Tailwind CSS configuration file:
+It's recommended to pass an `tailwindConfig` object directly instead, and you can use plugins.
 
-```ts
-await installTailwindPlugin(bundler, {
-  rootDir: '/src',
+### TailwindCSS Plugins
 
-  // ... other configuration ...
-  tailwindConfig: "/tailwind.config.js",
-});
-```
-
-And in the file system, create a `/tailwind.config.js` file like this:
-
-```js
-module.exports = {
-  // Your tailwind config
-}
-```
-
-## Advanced Usage
-
-### Use third-party plugins
-
-Most tailwind plugins relies on `tailwindcss/plugin` and so on. To avoid duplicated bundling for your editor, please **configure alias for tailwindcss**.
+Most tailwind plugins relies on `tailwindcss/plugin`. You must **configure alias for tailwindcss** to support.
 
 For vite:
 
 ```js
 // vite.config.ts
-import { defineConfig } from 'vite';
+import { defineConfig } from "vite";
 
 export default defineConfig({
   resolve: {
     alias: {
-      "tailwindcss": '@bundler-in-browser/tailwindcss',
+      tailwindcss: "@bundler-in-browser/tailwindcss",
 
       // or to pick if needed
       // "tailwindcss/plugin": '@bundler-in-browser/tailwindcss/plugin',
       // "tailwindcss/defaultConfig": '@bundler-in-browser/tailwindcss/defaultConfig',
       // "tailwindcss/defaultTheme": '@bundler-in-browser/tailwindcss/defaultTheme',
       // "tailwindcss/colors": '@bundler-in-browser/tailwindcss/colors',
-    }
+    },
   },
 });
 ```
@@ -112,14 +96,14 @@ For webpack:
 module.exports = {
   resolve: {
     alias: {
-      "tailwindcss": '@bundler-in-browser/tailwindcss',
+      tailwindcss: "@bundler-in-browser/tailwindcss",
 
       // or to pick if needed
       // "tailwindcss/plugin": '@bundler-in-browser/tailwindcss/plugin',
       // "tailwindcss/defaultConfig": '@bundler-in-browser/tailwindcss/defaultConfig',
       // "tailwindcss/defaultTheme": '@bundler-in-browser/tailwindcss/defaultTheme',
       // "tailwindcss/colors": '@bundler-in-browser/tailwindcss/colors',
-    }
+    },
   },
 };
 ```
@@ -136,6 +120,6 @@ The file pattern to scan. Defaults to `/\.(css|scss|sass|less|styl|html|vue|jsx?
 
 ### `tailwindConfig`
 
-The Tailwind CSS configuration. Can be a file path like `"/src/tailwind.config.js"` - but is dangerous cause we use `eval` to load it.
+The Tailwind CSS configuration object (recommended), or a string path to the configuration file in virtual file system.
 
-You can also pass an object directly, which is recommended.
+Prefer to pass an object directly, which is safe and supports plugins.

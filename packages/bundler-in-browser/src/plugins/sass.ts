@@ -1,7 +1,6 @@
 import * as sass from 'sass';
 import type { BundlerInBrowser } from "../BundlerInBrowser.js";
 import type esbuild from "esbuild-wasm";
-import { processCSS } from './common.js';
 
 export default function installSassPlugin(bundler: BundlerInBrowser) {
   const plugin: esbuild.Plugin = {
@@ -9,14 +8,17 @@ export default function installSassPlugin(bundler: BundlerInBrowser) {
     setup(build) {
       build.onLoad({ filter: /.scss$/ }, async (args) => {
         const fs = bundler.fs;
-        let fullPath = args.path;
+        let fullPath = args.path.replace(/[?#!].*$/, '');
         let contents = fs.readFileSync(fullPath, 'utf8') as string;
         let result = await sass.compileStringAsync(contents, {
           style: 'expanded'
         });
 
         const css = result.css;
-        return await processCSS(build, fullPath, css)
+        return bundler.pluginUtils.applyPostProcessors(args, {
+          contents: css,
+          loader: /\.module\.\w+$/.test(fullPath) ? 'local-css' : 'css',
+        })
       })
     }
   }

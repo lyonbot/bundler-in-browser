@@ -66,6 +66,9 @@ importers:
 
   packages/bundler-in-browser:
     dependencies:
+      buffer:
+        specifier: ^6.0.3
+        version: 6.0.3
       esbuild-wasm:
         specifier: ^0.25.5
         version: 0.25.5

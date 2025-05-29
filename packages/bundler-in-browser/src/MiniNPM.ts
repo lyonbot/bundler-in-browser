@@ -1,6 +1,7 @@
 import path from "path";
 import TarStream from 'tar-stream';
-import { rethrowWithPrefix, makeParallelTaskMgr, memoAsync, toPairs, listToTestFn } from "./utils.js";
+import { rethrowWithPrefix, memoAsync, toPairs, listToTestFn } from "./utils.js";
+import { makeParallelTaskMgr } from "./parallelTask.js";
 import semver from "semver";
 import { EventEmitter } from "./EventEmitter.js";
 import type { BundlerInBrowser } from "./BundlerInBrowser.js";

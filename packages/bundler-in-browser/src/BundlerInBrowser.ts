@@ -1,88 +1,17 @@
+import { Buffer } from "buffer";
 import esbuild from "esbuild-wasm";
-import { create as createResolver } from 'enhanced-resolve'
-import { MiniNPM } from "./MiniNPM.js";
-import { wrapCommonJS, pathToNpmPackage, makeParallelTaskMgr, escapeRegExp, cloneDeep } from './utils.js';
 import { EventEmitter } from "./EventEmitter.js";
-import { dirname } from "path";
-import { processCSS } from "./plugins/common.js";
-
-const setToSortedArray = (set: Set<string>) => Array.from(set).sort()
+import { MiniNPM } from "./MiniNPM.js";
+import { getDefaultBuildConfiguration, type BuildConfiguration } from "./configuration.js";
+import { UserCodeEsbuildHelper } from "./esbuild-user.js";
+import { VendorCodeEsbuildHelper, type VendorBundleConfig } from "./esbuild-vendor.js";
+import { makeParallelTaskMgr } from "./parallelTask.js";
+import { cloneDeep, toSortedArray, wrapCommonJS } from './utils.js';
 
 export namespace BundlerInBrowser {
-  export interface VendorBundleResult {
-    hash: string; // concat of sorted exposedDeps
-
-    exports: string[];
-    external: string[];
-    js: string;  // export `dep${index}`
-    css: string;
-  }
-
-  export interface BuildUserCodeOptions {
-    /** defaults to `/index.js` */
-    entrypoint?: string;
-
-    minify?: boolean;
-
-    /** eg. { "process.env.NODE_ENV": "production" } */
-    define?: Record<string, string>;
-
-    /** 
-     * exclude dependencies from bundle.
-     * 
-     * - string `"@foo/bar"` also matches `@foo/bar/baz.js`
-     * - string supports wildcards like `"*.png"`
-     * - regexp `/^vue$/` will NOT match `vue/dist/vue.esm-bundler.js`
-     * 
-     */
-    external?: (string | RegExp)[];
-
-    /** 
-     * your custom `define` function name. defaults to `"define"` 
-     * 
-     * Note: the function must have `amd` flag ( will check `define.amd == true` )
-     */
-    amdDefine?: string;
-
-    /** 
-     * in UMD mode, module will expose at `self[umdGlobalName]` (usually self is `window`) 
-     */
-    umdGlobalName?: string;
-
-    /** 
-     * in UMD mode, your mock *require(id)* function. set to null to disable.
-     * 
-     * this shall be a expression like `"window.myRequire"`, pointing to a function, which looks like `(id) => { return ... }`
-     * 
-     * @note you won't need this if `external` not set.
-     */
-    umdGlobalRequire?: string;
-
-    /**
-     * optional. applies to every css / sass / scss file.
-     */
-    postcssProcessor?: typeof import('postcss').Processor
-  }
-
-  export interface BuildUserCodeResult {
-    /** entry js file content, in CommonJS format */
-    js: string;
-
-    /** entry css file content */
-    css: string;
-
-    /** all npm package id, required by user code. eg `["vue", "lodash"]` */
-    npmRequired: Set<string>;
-
-    /** full vendor paths imported by user code, eg `["vue", "lodash/debounce"]` */
-    importedPaths: Set<string>;
-
-    /** all actual-used dependencies that declared in `external` (the build options) */
-    external: Set<string>;
-
-    /** raw esbuild output */
-    esbuildOutput: esbuild.BuildResult;
-  }
+  export type BuildConfiguration = import('./configuration.js').BuildConfiguration;
+  export type BuildUserCodeResult = import('./esbuild-user.js').BuildUserCodeResult;
+  export type VendorBundleResult = import('./esbuild-vendor.js').VendorBundleResult;
 
   export interface ConcatCodeResult {
     /** entry content, in **UMD format**, containing user code and vendor code */
@@ -92,20 +21,29 @@ export namespace BundlerInBrowser {
     css: string;
 
     /** all external dependencies, required by user code and vendor code */
-    external: string[];
+    externals: string[];
   }
 
-  export type BuildResult
-    = ConcatCodeResult
-    & Pick<BuildUserCodeResult, 'npmRequired' | 'importedPaths'>
-    & {
-      /** 
-       * the used vendor bundle.
-       * 
-       * can be reloaded next time by `bundler.loadVendorBundle()`, to skip npm install & vendor bundling 
-       */
-      vendorBundle: VendorBundleResult;
-    }
+  export interface BuildResult extends ConcatCodeResult {
+    /** 
+     * npm packages required by user code, which will be installed by `npm install` before bundling.
+     * 
+     * this is a set of package names, without version.
+     */
+    npmRequired: string[];
+
+    /**
+     * the bundled user code without vendor.
+     */
+    userCode: BuildUserCodeResult;
+
+    /** 
+     * the used vendor bundle.
+     * 
+     * can be reloaded next time by `bundler.loadVendorBundle()`, to skip npm install & vendor bundling 
+     */
+    vendorBundle: VendorBundleResult;
+  }
 
   export interface Events {
     'initialized': () => void;
@@ -143,9 +81,29 @@ export namespace BundlerInBrowser {
 }
 
 export class BundlerInBrowser {
-  public readonly fs: BundlerInBrowser.IFs;
+  readonly fs: BundlerInBrowser.IFs;
+  readonly events = new EventEmitter<BundlerInBrowser.Events>();
 
-  public events = new EventEmitter<BundlerInBrowser.Events>();
+  readonly npm: MiniNPM;
+
+  config: BuildConfiguration = getDefaultBuildConfiguration();
+
+  /** 
+   * ⚠️ please use `.config` to update configuration, not this. otherwise something may break.
+   * 
+   * @internal
+   */
+  esbuildBaseOptions: esbuild.BuildOptions = {
+    bundle: true,
+    format: "cjs",  // BundlerInBrowser will wrap code to UMD at the end.
+    target: "es2022",
+    platform: "browser",
+    // no write
+    // no minify
+    // no entryPoints
+    // no outdir
+    // no plugins
+  }
 
   initialized: Promise<void> | false = false;
   private async assertInitialized() {
@@ -165,203 +123,40 @@ export class BundlerInBrowser {
     await this.initialized;
   }
 
-  public userCodePlugins: (esbuild.Plugin | ((opts: BundlerInBrowser.BuildUserCodeOptions) => (esbuild.Plugin | null)))[] = [] // only for user code
-  public vendorPlugins: esbuild.Plugin[] = [] // only for vendor code
-  public commonPlugins: esbuild.Plugin[] = [] // works for both user and vendor, will be appended to user plugins
+  userCodePlugins: esbuild.Plugin[] = [] // only for user code
+  vendorPlugins: esbuild.Plugin[] = [] // only for vendor code
+  commonPlugins: esbuild.Plugin[] = [] // works for both user and vendor, applied after userCodePlugins / vendorPlugins
+
+  lastVendorBundle: undefined | BundlerInBrowser.VendorBundleResult
 
   constructor(fs: BundlerInBrowser.IFs) {
     this.fs = fs;
-    this.npm = new MiniNPM(fs, {
-      useJSDelivrToQueryVersions: false,
-    });
 
+    this.npm = new MiniNPM(fs, { useJSDelivrToQueryVersions: false });
     this.npm.events.on('progress', event => {
       this.events.emit('npm:progress', event);
     });
-
-    const resolvePlugin = (): esbuild.Plugin => {
-      const fs = this.fs;
-      const resolve = createResolver({
-        fileSystem: fs as any,
-        extensions: ['.js', '.mjs', '.cjs', '.json', '.wasm', '.ts', '.tsx', '.jsx', '.vue'],
-        conditionNames: ['import', 'require'],
-        symlinks: true,
-      })
-
-      return ({
-        name: "resolve",
-        setup(build) {
-          build.onResolve({ filter: /.*/ }, async (args) => {
-            let fullPath = args.path;
-            if (/^(https?:)\/\/|^data:/.test(fullPath)) return { external: true, path: fullPath }; // URL is external
-
-            return await new Promise((done, reject) => {
-              resolve(args.resolveDir || dirname(args.importer), fullPath, (err, res) => {
-                if (err) return reject(err);
-                if (!res) return reject(new Error(`Cannot resolve ${fullPath}`));
-
-                else done({ path: res });
-              })
-            });
-          });
-        },
-      });
-    }
-    const commonLoaderPlugin = (): esbuild.Plugin => {
-      const builtinLoaders = ['js', 'jsx', 'tsx', 'ts', 'css', 'json', 'text'] as const
-      return ({
-        name: "common-loader",
-        setup(build) {
-          build.onLoad({ filter: /\.([mc]?jsx?|tsx?|css|json|txt)$/ }, async (args) => {
-            let fullPath = args.path;
-            let suffix = fullPath.split('.').pop()!;
-            let loader: esbuild.Loader = 'js';
-
-            if (builtinLoaders.includes(suffix as any)) loader = suffix as typeof builtinLoaders[number];
-            else if (suffix === 'txt') loader = 'text';
-            else if (suffix === 'cjs' || suffix === 'mjs') loader = 'js';
-
-            if (loader === 'css') {
-              return await processCSS(build, fullPath, fs.readFileSync(fullPath, 'utf8') as string)
-            }
-
-            return {
-              contents: fs.readFileSync(fullPath),
-              loader
-            }
-          })
-
-          build.onLoad({ filter: /\.(png|jpe?g|gif|svg|webp)$/ }, async (args) => {
-            return {
-              contents: fs.readFileSync(args.path),
-              loader: 'dataurl'
-            }
-          })
-        },
-      });
-    }
-
-    this.userCodePlugins.push(
-      // npmCollectPlugin will be installed at last, before common plugins
-    )
-
-    this.vendorPlugins.push(
-    )
-
-    this.commonPlugins.push(
-      resolvePlugin(),
-      commonLoaderPlugin(),
-    )
   }
 
-  npm: MiniNPM;
-
-  /**
-   * stage1: build user code, collect npm dependencies, yields CommonJS module
-   */
-  async bundleUserCode(opts: BundlerInBrowser.BuildUserCodeOptions): Promise<BundlerInBrowser.BuildUserCodeResult> {
+  async createUserCodeBuildHelper() {
     await this.assertInitialized();
 
-    const npmRequired = new Set<string>();
-    const importedPaths = new Set<string>();
-    const externalCollect = getExternalPlugin(opts.external);
-
-    const npmCollectPlugin = (): esbuild.Plugin => {
-      return ({
-        name: 'npm-collect',
-        setup(build) {
-          build.onResolve({ filter: /^[a-zA-Z].*|^@\w+\/.*/ }, async (args) => {
-            let fullPath = args.path
-            let [packageName] = pathToNpmPackage(fullPath)
-
-            npmRequired.add(packageName);
-            importedPaths.add(fullPath);
-
-            return {
-              path: fullPath,
-              external: true
-            }
-          })
-        }
-      })
-    }
-
-    const userCodePlugins: esbuild.Plugin[] = []
-    for (let plugin of this.userCodePlugins) {
-      const p = typeof plugin === 'function' ? plugin(opts) : plugin;
-      if (p) userCodePlugins.push(p);
-    }
-
-    let entryPath = opts.entrypoint;
-    if (!entryPath) {
-      const candidates = [
-        '/index.js', '/index.ts', '/index.jsx', '/index.tsx',
-        '/src/index.js', '/src/index.ts', '/src/index.jsx', '/src/index.tsx',
-      ];
-      for (let path of candidates) {
-        if (this.fs.existsSync(path)) { entryPath = path; break }
-      }
-      if (!entryPath) throw new Error(`Cannot find entry point, please specify one in options.entrypoint`);
-    }
-
-    const output = await esbuild.build({
-      entryPoints: [entryPath],
-      bundle: true,
-      write: false,
-      outdir: "/user",
-      format: "cjs",
-      target: "es2022",
-      platform: "browser",
-      minify: !!opts.minify,
-      plugins: [
-        externalCollect.plugin,
-        ...userCodePlugins,
-        npmCollectPlugin(), // after user plugins, before common plugins
-        ...this.commonPlugins,
-      ],
-
-      // yet not supported
-      // splitting: true,
-      // chunkNames: "chunk-[name]-[hash]",
-    })
-
-    let userJs = output.outputFiles.find(x => x.path.endsWith('.js'))?.text || '';
-    let userCss = output.outputFiles.find(x => x.path.endsWith('.css'))?.text || '';
-
-    return {
-      js: userJs,
-      css: userCss,
-      npmRequired,
-      importedPaths,
-      external: externalCollect.collected,
-      esbuildOutput: output,
-    }
+    const buildHelper = new UserCodeEsbuildHelper(this);
+    return buildHelper;
   }
 
-  /**
-   * stage2: npm install & bundle vendor
+  /** 
+   * update `/package.json` and install missing npm packages.
    * 
-   * - all new dependencies will be installed and add to `/package.json`
-   * - if `/package.json` exists, it will be used to specify dependencies version. ( the `npmRequired` doesn't include version number )
+   * to specify version, write like `foo@^1.2.3`
+   * 
+   * won't emit event.
+   * 
+   * @returns new package.json object
    */
-  async bundleVendor(opts: {
-    /** not very useful, just a marker as-is in the VendorBundleResult */
-    hash: string;
-
-    /** what npm packages to install */
-    npmRequired: Set<string>;
-    
-    /** what module paths to export, from this vendor bundle */
-    exports: Set<string>;
-
-    external?: (string | RegExp)[];
-    define?: Record<string, string>;
-  }): Promise<BundlerInBrowser.VendorBundleResult> {
-    await this.assertInitialized();
-
-    const exposedDeps = Array.from(opts.exports)
-    const externalCollect = getExternalPlugin(opts.external);
-
+  async addDepsToPackageJson(dependencies: string[]) {
+    const { fs, events } = this;
+    const path = '/package.json'
     const rootPackageJson = {
       name: 'root',
       version: '0.0.0',
@@ -370,9 +165,8 @@ export class BundlerInBrowser {
 
     // read package.json from fs
     try {
-      const path = '/package.json'
-      if (this.fs.existsSync(path)) {
-        const data = JSON.parse(this.fs.readFileSync(path, 'utf8') as string);
+      if (fs.existsSync(path)) {
+        const data = JSON.parse(fs.readFileSync(path, 'utf8') as string);
         Object.assign(rootPackageJson, data);
         if (!rootPackageJson.dependencies) rootPackageJson.dependencies = {};
       }
@@ -382,101 +176,56 @@ export class BundlerInBrowser {
 
     // add missing npm dependencies
     const addingMissingDepTasks = makeParallelTaskMgr();
-    for (const name of opts.npmRequired) {
+    for (const expr of dependencies) {
       addingMissingDepTasks.push(async () => {
-        if (rootPackageJson.dependencies[name]) return;
+        let name = expr;
+        let version = '';
+        {
+          const atIndex = expr.indexOf('@', 1);
+          if (atIndex !== -1) {
+            name = expr.slice(0, atIndex);
+            version = expr.slice(atIndex + 1);
+          }
+        }
 
-        const version = await this.npm.getPackageVersions(name).then(v => v?.tags?.latest)
-        if (!version) throw new Error(`Cannot fetch version of ${name}`);
+        if (rootPackageJson.dependencies[name] && !version) return;
+        if (!version) {
+          const latest = await this.npm.getPackageVersions(name).then(v => v?.tags?.latest)
+          if (!latest) throw new Error(`Cannot fetch version of ${name}`);
+          version = `^${latest}`;
+        }
 
-        rootPackageJson.dependencies[name] = `^${version}`;
+        rootPackageJson.dependencies[name] = version;
       })
     }
     await addingMissingDepTasks.run()
 
     // write package.json
-    this.events.emit('npm:packagejson:update', rootPackageJson);
-    this.fs.writeFileSync('/package.json', JSON.stringify(rootPackageJson, null, 2));
+    fs.writeFileSync(path, JSON.stringify(rootPackageJson, null, 2));
+    return rootPackageJson;
+  }
 
-    try {
-      await this.npm.install(rootPackageJson.dependencies);
-      this.events.emit('npm:install:done');
-    } catch (err: any) {
-      this.events.emit('npm:install:error', { errors: err.errors || [err] });
-      throw err;
-    }
+  async createVendorBuildHelper(config: VendorBundleConfig) {
+    await this.assertInitialized();
 
-    // create a new bundle
-    const vendor: BundlerInBrowser.VendorBundleResult = {
-      hash: opts.hash,
-      exports: exposedDeps,
-      external: [],
-      js: '',
-      css: '',
-    }
-
-    const workDir = `/vendor_dll`
-
-    let entryPath = `${workDir}/source.js`
-    let entryPathRegex = new RegExp(`^${entryPath}$`)
-    let entryContent = 'exports.deps = {\n'
-
-    for (let i = 0; i < exposedDeps.length; i++) {
-      const dep = exposedDeps[i];
-      entryContent += `"${dep}": () => require("${dep}"),\n`
-    }
-    entryContent += '};'
-
-    const buildOutput = await esbuild.build({
-      entryPoints: [entryPath],
-      bundle: true,
-      outdir: workDir,
-      write: false,
-      format: "cjs",
-      target: "es2022",
-      platform: "browser",
-      minify: true,
-      define: { ...opts.define },
-      plugins: [
-        {
-          name: 'vendor-entry',
-          setup(build) {
-            build.onResolve({ filter: entryPathRegex }, (args) => {
-              return { path: entryPath }
-            })
-            build.onLoad({ filter: entryPathRegex }, (args) => {
-              if (args.path === entryPath) return { contents: entryContent, loader: 'js' };
-              return null
-            })
-          }
-        },
-        externalCollect.plugin,
-        ...this.vendorPlugins,
-        ...this.commonPlugins,
-      ],
-    })
-
-    vendor.js = buildOutput.outputFiles.find(x => x.path.endsWith('.js'))?.text || '';
-    vendor.css = buildOutput.outputFiles.find(x => x.path.endsWith('.css'))?.text || '';
-    vendor.external = Array.from(externalCollect.collected);
-
-    return vendor;
+    const buildHelper = new VendorCodeEsbuildHelper(this, config);
+    return buildHelper;
   }
 
   /**
-   * stage3: concat user code and vendor code
-   * 
-   * in the output, `js` is in UMD format, and `external` is dependencies excluded from the bundle.
+   * generate a UMD format code, which contains user code and vendor code.
    */
   concatUserCodeAndVendors(
-    userCode: { css: string, js: string; external: Set<string> },
+    userCode: BundlerInBrowser.BuildUserCodeResult,
     dlls: BundlerInBrowser.VendorBundleResult[],
-    opts: Pick<BundlerInBrowser.BuildUserCodeOptions,
-      'amdDefine' | 'umdGlobalName' | 'umdGlobalRequire'> = {},
   ): BundlerInBrowser.ConcatCodeResult {
-    const external = new Set(([...userCode.external]).concat(...dlls.map(dll => dll.external)));
+    const { amdDefine, umdGlobalName, umdGlobalRequire } = this.config
+    dlls = dlls.filter(Boolean);
 
-    const amdDefine = opts.amdDefine || 'define';
+    const externals = new Set(userCode.externals);
+    dlls.forEach(dll => dll.externals.forEach(ex => externals.add(ex)));
+
+    // generate amd define check code
     let amdDefineExists = '';  // typically is `typeof define === 'function' && define.amd`
     {
       let i = -1, first = true;
@@ -490,17 +239,20 @@ export class BundlerInBrowser {
     const finalJs = [
       `(function (root, factory) {`,
       `  if (${amdDefineExists}) {`, // AMD
-      `    ${amdDefine}(${JSON.stringify(['require', ...external])}, factory);`,
+      `    ${amdDefine}(${JSON.stringify(['require', ...externals])}, factory);`,
       `  } else if (typeof module === 'object' && module.exports) {`, // CommonJS
       `    module.exports = factory(typeof require === 'function' ? require : undefined);`,
       `  } else {`, // browser
-      (opts.umdGlobalName ? `  root[${JSON.stringify(opts.umdGlobalName)}] = ` : '') +
-      `    factory(${opts.umdGlobalRequire || '() => { throw new Error("require not implemented") }'}\n);`,
+      (umdGlobalName ? `  root[${JSON.stringify(umdGlobalName)}] = ` : '') +
+      `    factory(${umdGlobalRequire || 'null'}\n);`,
       `  }`,
-      `})(typeof self !== 'undefined' ? self : this, (require) => (`, // outerRequire
+      `})(typeof self !== 'undefined' ? self : this, (outerRequire) => (`, // outerRequire
+      `/* user code */`,
       `((require) => ${wrapCommonJS(userCode.js)})(`,
+      `/* vendors */`,
       /* a wrapped require function, which will load vendor's deps */
-      `((outerRequire)=>{`,
+      `(()=>{`,
+      ` if (typeof outerRequire !== 'function') outerRequire = (s) => { throw new Error("require not implemented: " + s) };`, // ensure outerRequire is a function
       ` const $$deps={}, $$depsLoaded=Object.create(null),`, // deps =  { "foobar": () => module.exports }
       ` require = name => { `,
       `   if (!(name in $$deps)) return outerRequire(name);`, // unknown dep goes to outerRequire
@@ -509,7 +261,7 @@ export class BundlerInBrowser {
       ` };`,
       ...dlls.map(dll => `Object.assign($$deps, ${wrapCommonJS(dll.js)}.deps);`),
       ` return require;`,
-      '})(require))',
+      '})())',
       '))',
     ].join('\n')
 
@@ -521,131 +273,129 @@ export class BundlerInBrowser {
     return {
       js: finalJs,
       css: finalCss,
-      external: setToSortedArray(external),
+      externals: toSortedArray(externals),
     };
   }
 
-  /** cached result of `bundleVendor()`, only for `build()` */
-  lastVendorBundle: undefined | BundlerInBrowser.VendorBundleResult
+  async build() {
+    const { events, lastVendorBundle } = this;
 
+    // assert initialized
+    await this.assertInitialized();
+    events.emit('build:start');
+
+    // build user code
+    const userCodeHelper = await this.createUserCodeBuildHelper();
+    const userCode = await userCodeHelper.build();
+    events.emit('build:usercode', userCode);
+
+    // make vendorHelper for later use
+    const vendorHelper = await this.createVendorBuildHelper({
+      exportPaths: toSortedArray(userCode.vendorImportedPaths.keys()),
+    });
+    const isVendorReusable = lastVendorBundle?.hash === vendorHelper.hash;
+    let vendorBundle: BundlerInBrowser.VendorBundleResult;
+
+    // install npm packages and bundle vendor code
+    // if vendor bundle is reusable, we can skip npm install and vendor bundling
+    if (!isVendorReusable) {
+      // update `/package.json` with user code npm dependencies
+      const rootPackageJson = await this.addDepsToPackageJson(userCode.npmRequired);
+      events.emit('npm:packagejson:update', rootPackageJson);
+
+      // install npm packages
+      try {
+        await this.npm.install(rootPackageJson.dependencies);
+        this.events.emit('npm:install:done');
+      } catch (err: any) {
+        this.events.emit('npm:install:error', { errors: err.errors || [err] });
+        throw err;
+      }
+
+      // build vendor code
+      vendorBundle = await vendorHelper.build();
+      this.events.emit('build:vendor', vendorBundle);
+      this.lastVendorBundle = vendorBundle;
+    } else {
+      // just reuse the last vendor bundle
+      vendorBundle = lastVendorBundle!;
+    }
+
+    // compose build result
+    const concatResult = this.concatUserCodeAndVendors(userCode, [vendorBundle])
+    const result: BundlerInBrowser.BuildResult = {
+      js: concatResult.js,
+      css: concatResult.css,
+      externals: concatResult.externals,
+
+      npmRequired: toSortedArray(userCode.npmRequired),
+      userCode,
+      vendorBundle,
+    }
+
+    return result;
+  }
+
+  /**
+   * load vendor bundle, which can be reloaded next time by `loadVendorBundle()`.
+   */
   loadVendorBundle(bundle: BundlerInBrowser.VendorBundleResult | undefined | null) {
     if (!bundle) return;
 
-    const b = {} as BundlerInBrowser.VendorBundleResult;
-    b.css = bundle.css || '';
-    b.js = bundle.js || '';
-    b.external = Array.from(bundle.external || []);
-    b.exports = Array.from(bundle.exports || []);
-    b.hash = bundle.hash || '';
+    const b: BundlerInBrowser.VendorBundleResult = {
+      hash: bundle.hash || '',
+      js: bundle.js || '',
+      css: bundle.css || '',
+      externals: Array.from(bundle.externals || []),
+      esbuildOutput: undefined, // FIXME: do we really need this?
+    }
 
     if (!b.css || !b.js || !b.hash) return; // invalid bundle
     this.lastVendorBundle = b;
   }
 
-  dumpVendorBundle() {
-    return cloneDeep(this.lastVendorBundle);
-  }
-
   /**
-   * build and compile user code, install npm dependencies, and bundle to UMD format.
-   * 
-   * in the output, `js` is in UMD format, and `external` is dependencies excluded from the bundle.
+   * dump vendor bundle, which can be reloaded next time by `loadVendorBundle()`.
    */
-  async build(opts?: BundlerInBrowser.BuildUserCodeOptions): Promise<BundlerInBrowser.BuildResult> {
-    await this.assertInitialized();
-    this.events.emit('build:start');
-
-    // stage 1: build user code, collect npm dependencies, yields CommonJS module
-
-    const userCode = await this.bundleUserCode(opts || {});
-    this.events.emit('build:usercode', userCode);
-
-    // phase 2: bundle vendor, including npm install
-    // (may be skipped, if dep not changed)
-
-    const vendorHash = [
-      /* vendor's import */ opts?.external?.join('|'),
-      /* vendor's exports */ setToSortedArray(userCode.importedPaths).join(','),
-      /* define */ Object.entries(opts?.define || {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join(';'),
-    ].join('\n');
-
-    const canReuseVendorBundle = (() => {
-      const prev = this.lastVendorBundle?.exports;
-      if (!prev) return false;
-
-      const prevSet = new Set(prev);
-      return Array.from(userCode.importedPaths).every(dep => prevSet.has(dep));
-    })();
-    const vendorBundle = canReuseVendorBundle
-      ? this.lastVendorBundle!
-      : (this.lastVendorBundle = await this.bundleVendor({
-        hash: vendorHash,
-        npmRequired: userCode.npmRequired,
-        exports: userCode.importedPaths,
-        define: opts?.define,
-      }))
-
-    this.events.emit('build:vendor', vendorBundle);
-
-    // phase 3: concat all into one file
-
-    const final = this.concatUserCodeAndVendors(userCode, [vendorBundle], opts)
-
-    const external = new Set(final.external);
-    vendorBundle.external.forEach(ex => external.add(ex));
-
-    return {
-      // from ConcatCodeResult
-      js: final.js,
-      css: final.css,
-      external: setToSortedArray(external),
-      // from userCode
-      npmRequired: new Set(userCode.npmRequired),
-      importedPaths: new Set(userCode.importedPaths),
-      // from vendorBundle
-      vendorBundle,
-    }
-  }
-}
-
-/** alias of `BundlerInBrowser.Events` */
-export type BundlerInBrowserEvents = BundlerInBrowser.Events;
-
-function getExternalPlugin(external?: (string | RegExp)[]) {
-  const regexParts: { [flags: string]: string[] } = {};
-  for (const e of external || []) {
-    if (!e) continue;
-
-    let flags = '', source = '';
-    if (e instanceof RegExp) {
-      flags = e.flags;
-      source = e.source;
-    } else {
-      source = '^' + escapeRegExp(e).replace(/\\\*/g, '.*');
-    }
-
-    if (!regexParts[flags]) regexParts[flags] = [];
-    regexParts[flags].push(source);
+  dumpVendorBundle() {
+    return cloneDeep({
+      ...this.lastVendorBundle,
+      esbuildOutput: undefined, // don't dump esbuild output
+    });
   }
 
-  const allRegex = Object
-    .entries(regexParts)
-    .map(([flags, sources]) => new RegExp(`(${sources.join(')|(')})`, flags))
+  /** utils that plugin developers may use */
+  pluginUtils = {
+    /** if you have your own load plugin, use this to run post process like babel, postcss etc. */
+    applyPostProcessors: async (args: esbuild.OnLoadArgs, result: esbuild.OnLoadResult) => {
+      for (const processor of this.config.postProcessors) {
+        const { test } = processor;
+        if (typeof test === 'function' && !test(args)) continue;
+        else if (test instanceof RegExp && !test.test(args.path)) continue;
 
-  const collected = new Set<string>();
-  const plugin: esbuild.Plugin = {
-    name: 'external',
-    setup(build) {
-      if (!allRegex.length) return;
-
-      build.onResolve({ filter: /.*/ }, async (args) => {
-        if (allRegex.some(regex => regex.test(args.path))) {
-          collected.add(args.path);
-          return { path: args.path, external: true }
+        if (typeof result.contents !== 'string') {
+          if (result.contents instanceof Buffer) result.contents = result.contents.toString('utf8');
+          else if (result.contents instanceof Uint8Array) result.contents = new TextDecoder().decode(result.contents);
+          else throw new Error('unknown content type from fs. expected string/Buffer/Uint8Array');
         }
-      })
+
+        try {
+          await processor.process(args, result);
+        } catch (error) {
+          result.errors ||= [];
+          result.errors.push({
+            text: `Error in postProcessor [${processor.name}]: ${error instanceof Error ? error.message : String(error)}`,
+            location: {
+              file: args.path,
+              line: 1,
+              column: 1,
+            }
+          });
+          return result; // skip other processors
+        }
+      }
+
+      return result;
     },
   }
-
-  return { collected, plugin }
 }
