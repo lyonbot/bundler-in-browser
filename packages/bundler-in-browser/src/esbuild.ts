@@ -127,6 +127,7 @@ export function createESBuildResolver(bundler: BundlerInBrowser): esbuild.Plugin
   const resolve = createResolver({
     fileSystem: fs as any,
     extensions: extensions.slice(),
+    mainFields: ['module', 'browser', 'main'],
     conditionNames: ['import', 'require'],
     symlinks: true,
   })
