@@ -395,10 +395,14 @@ export class MiniNPM {
     return handler(packageName, version);
   }
 
+  cachedFetchJson = memoAsync(async (url: string) => {
+    return fetch(url).then(x => x.json());
+  })
+
   getPackageJsonViaVersions = memoAsync(async (packageName: string, version: string) => {
     // this URL has disk cache, might be faster
     const packageUrl = `${this.options.registryUrl}/${packageName}/`;
-    const registryInfo = await fetch(packageUrl).then(x => x.json());
+    const registryInfo = await this.cachedFetchJson(packageUrl)
 
     return registryInfo.versions[version];
   })
@@ -406,7 +410,7 @@ export class MiniNPM {
   getPackageJsonDirectly = memoAsync(async (packageName: string, version: string) => {
     // a bit slower (this URL is api without cache)
     const url = `${this.options.registryUrl}/${packageName}/${version}`;
-    const res = await fetch(url).then(x => x.json());
+    const res = await this.cachedFetchJson(url);
 
     return {
       dependencies: {},
@@ -429,7 +433,7 @@ export class MiniNPM {
   getPackageVersionsWithJSDelivr = memoAsync(async (packageName: string) => {
     try {
       const url = `https://data.jsdelivr.com/v1/package/npm/${packageName}`
-      const res = await fetch(url).then(x => x.json())
+      const res = await this.cachedFetchJson(url)
       const versions = (res.versions || []) as string[];
       if (!versions.length) throw new Error(`No versions`);
 
@@ -446,7 +450,7 @@ export class MiniNPM {
     // https://registry.npmjs.org/react/
     try {
       const packageUrl = `${this.options.registryUrl}/${packageName}/`;
-      const registryInfo = await fetch(packageUrl).then(x => x.json())
+      const registryInfo = await this.cachedFetchJson(packageUrl)
       if (!registryInfo.versions) throw new Error(`No versions`);
 
       const versions = Object.keys(registryInfo.versions);
