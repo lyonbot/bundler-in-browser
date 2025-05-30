@@ -65,8 +65,10 @@ const buildResult = await bundler.build();
 
 // it returns { js, css } and the `js` is a CommonJS module
 // Execute the js (use `wrapCommonJS()` to convert CommonJS into IIFE function)
-const run = new Function(wrapCommonJS(buildResult.js));
-run();
+const run = new Function("return " + wrapCommonJS(buildResult.js));
+const userExports = run();
+
+console.log("user code exports:", userExports);
 
 // Apply any generated CSS
 if (buildResult.css) {
@@ -144,66 +146,14 @@ await installVuePlugin(bundler, {
 // Now you can compile .vue files
 ```
 
-## Caveats
+## Cookbook
 
-### NPM Configuration
+### [**📘 External Libraries**](./cookbook/external-libraries.md)
 
-The built-in NPM client can install packages automatically. It works with the built-in resolver, with dedicated directory structure under-the-hood.
+↑ click title to see more details.
 
-You can configure it with the following options:
+bundler-in-browser allows user to `import` from npm, or your pre-defined modules.
 
-- Create a `/package.json` to **specify package versions**
-
-  ```json
-  {
-    "dependencies": {
-      "canvas-confetti": "^1.5.1"
-    }
-  }
-  ```
-
-- **Custom npm Registry**:
-
-  ```js
-  bundler.npm.options.registryUrl = "https://mirrors.cloud.tencent.com/npm";
-  ```
-
-- **Prevent Installing Specific Packages**: - please use it in conjunction with `bundler.config.externals`
-
-  ```js
-  bundler.npm.options.blocklist = [
-    "@vue/compiler-core",
-    "@vue/compiler-dom",
-    "@vue/compiler-sfc",
-    "@vue/server-renderer",
-    // support RegExp too:   /^@vue\/compiler-.*$/
-  ];
-  ```
-
-- **Progress Events**: Monitor installation progress:
-
-  ```js
-  bundler.events.on("npm:progress", (e) => console.log("[npm]", e));
-  bundler.events.on("npm:install:error", (event) => console.log("[npm] install failed", event.errors));
-  bundler.events.on("npm:install:done", () => console.log("[npm] install:done"));
-  bundler.events.on("npm:packagejson:update", (newPackageJSON) => console.log("[newPackageJSON]", newPackageJSON));
-  ```
-
-### Vendor Bundle Management
-
-Building vendor bundle is slow, so you can reuse it. It depends on `bundler.config` and dependencies of user code.
-
-```js
-// Export vendor bundle for reuse
-const vendor = bundler.dumpVendorBundle();
-saveToDisk("myVendor.json", vendor);
-
-// Load vendor bundle in another instance
-const loadedVendor = loadFromDisk("myVendor.json");
-bundler.loadVendorBundle(loadedVendor);
-
-// Clear vendor cache
-bundler.loadVendorBundle(null);
-```
-
-The vendor bundle is automatically cached and reused when dependencies haven't changed, improving compilation speed.
+- add pre-defined modules (use `bundler.config.externals`)
+- configure npm, blocklist, custom registry
+- vendor bundle (dll cache)
