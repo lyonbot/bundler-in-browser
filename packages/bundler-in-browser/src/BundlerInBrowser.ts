@@ -6,7 +6,7 @@ import { getDefaultBuildConfiguration, type BuildConfiguration } from "./configu
 import { UserCodeEsbuildHelper } from "./esbuild-user.js";
 import { VendorCodeEsbuildHelper, type VendorBundleConfig } from "./esbuild-vendor.js";
 import { makeParallelTaskMgr } from "./parallelTask.js";
-import { cloneDeep, toSortedArray, wrapCommonJS } from './utils.js';
+import { cloneDeep, separateNpmPackageNameVersion, stripQuery, toSortedArray, wrapCommonJS } from './utils.js';
 
 export namespace BundlerInBrowser {
   export type BuildConfiguration = import('./configuration.js').BuildConfiguration;
@@ -178,15 +178,7 @@ export class BundlerInBrowser {
     const addingMissingDepTasks = makeParallelTaskMgr();
     for (const expr of dependencies) {
       addingMissingDepTasks.push(async () => {
-        let name = expr;
-        let version = '';
-        {
-          const atIndex = expr.indexOf('@', 1);
-          if (atIndex !== -1) {
-            name = expr.slice(0, atIndex);
-            version = expr.slice(atIndex + 1);
-          }
-        }
+        let [name, version] = separateNpmPackageNameVersion(expr, '')
 
         if (rootPackageJson.dependencies[name] && !version) return;
         if (!version) {
@@ -304,12 +296,14 @@ export class BundlerInBrowser {
       events.emit('npm:packagejson:update', rootPackageJson);
 
       // install npm packages
-      try {
-        await this.npm.install(rootPackageJson.dependencies);
-        this.events.emit('npm:install:done');
-      } catch (err: any) {
-        this.events.emit('npm:install:error', { errors: err.errors || [err] });
-        throw err;
+      if (!await this.npm.isAlreadySatisfied(rootPackageJson.dependencies)) {
+        try {
+          await this.npm.install(rootPackageJson.dependencies);
+          this.events.emit('npm:install:done');
+        } catch (err: any) {
+          this.events.emit('npm:install:error', { errors: err.errors || [err] });
+          throw err;
+        }
       }
 
       // build vendor code
@@ -366,18 +360,22 @@ export class BundlerInBrowser {
 
   /** utils that plugin developers may use */
   pluginUtils = {
+    stripQuery,
+
+    /** for post processors - convert contents to string */
+    contentsToString(contents: esbuild.OnLoadResult['contents']): string {
+      if (typeof contents === 'string') return contents;
+      if (contents instanceof Buffer) return contents.toString('utf8');
+      else if (contents instanceof Uint8Array) return new TextDecoder().decode(contents);
+      else throw new Error('unknown content type from fs. expected string/Buffer/Uint8Array');
+    },
+
     /** if you have your own load plugin, use this to run post process like babel, postcss etc. */
     applyPostProcessors: async (args: esbuild.OnLoadArgs, result: esbuild.OnLoadResult) => {
       for (const processor of this.config.postProcessors) {
         const { test } = processor;
         if (typeof test === 'function' && !test(args)) continue;
         else if (test instanceof RegExp && !test.test(args.path)) continue;
-
-        if (typeof result.contents !== 'string') {
-          if (result.contents instanceof Buffer) result.contents = result.contents.toString('utf8');
-          else if (result.contents instanceof Uint8Array) result.contents = new TextDecoder().decode(result.contents);
-          else throw new Error('unknown content type from fs. expected string/Buffer/Uint8Array');
-        }
 
         try {
           await processor.process(args, result);

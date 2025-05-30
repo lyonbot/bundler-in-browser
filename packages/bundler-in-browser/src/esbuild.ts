@@ -3,7 +3,7 @@ import { dirname } from "path";
 import { create as createResolver } from 'enhanced-resolve'
 import type { BundlerInBrowser } from "./BundlerInBrowser.js";
 import type { BuildConfiguration } from "./configuration.js";
-import { escapeRegExp } from "./utils.js";
+import { escapeRegExp, stripQuery } from "./utils.js";
 
 /* esbuild builtin loaders */
 const builtinLoaders = ['js', 'jsx', 'tsx', 'ts', 'css', 'json', 'text'] satisfies esbuild.Loader[]
@@ -90,9 +90,9 @@ export function createESBuildNormalLoader(bundler: BundlerInBrowser): esbuild.Pl
   return ({
     name: "normal-loader",
     setup(build) {
-      build.onLoad({ filter: /\.([mc]?jsx?|tsx?|css|json|txt)$/ }, async (args) => {
+      build.onLoad({ filter: /\.([mc]?jsx?|tsx?|css|json|txt)($|\?)/ }, async (args) => {
 
-        let fullPath = args.path.replace(/[?#!].*$/, '');
+        let fullPath = stripQuery(args.path);
         let suffix = fullPath.split('.').pop()!;
         let loader: esbuild.Loader = 'js';
 
@@ -111,7 +111,7 @@ export function createESBuildNormalLoader(bundler: BundlerInBrowser): esbuild.Pl
         return await bundler.pluginUtils.applyPostProcessors(args, result);
       })
 
-      build.onLoad({ filter: /\.(png|jpe?g|gif|svg|webp)$/ }, async (args) => {
+      build.onLoad({ filter: /\.(png|jpe?g|gif|svg|webp)($|\?)/ }, async (args) => {
         return {
           contents: fs.readFileSync(args.path),
           loader: 'dataurl'

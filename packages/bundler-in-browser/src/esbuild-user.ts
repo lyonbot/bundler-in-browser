@@ -1,6 +1,6 @@
 import type esbuild from "esbuild-wasm";
 import { createESBuildNormalLoader, createESBuildResolver, EsbuildHelper, guessEntrypoint, type BaseBuildResult } from "./esbuild.js";
-import { pathToNpmPackage } from "./utils.js";
+import { pathToNpmPackage, stripQuery } from "./utils.js";
 
 /**
  * usage:
@@ -21,7 +21,7 @@ export class UserCodeEsbuildHelper extends EsbuildHelper<BuildUserCodeResult> {
         name: 'npm-collect',
         setup: (build) => {
           build.onResolve({ filter: /^[a-zA-Z].*|^@[\w-]+\/.*/ }, async (args) => {
-            let fullPath = args.path.replace(/[?#!].*$/, '');
+            let fullPath = stripQuery(args.path);
             let [packageName] = pathToNpmPackage(fullPath);
 
             this.npmRequired.add(packageName);

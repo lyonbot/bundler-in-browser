@@ -73,40 +73,41 @@ async function main() {
     if (!isBuildRequest(data)) return;
 
     // reset fs
-    fs.umount('/')
-    fs.mount('/', InMemory.create({}));
+    // fs.umount('/')
+    // fs.mount('/', InMemory.create({}));
+    fs.rmSync('/src', { recursive: true, force: true });
+
     Object.entries(data.files).forEach(([path, content]) => {
       fs.mkdirSync(dirname(path), { recursive: true });
       fs.writeFileSync(path, content);
     });
 
-    await bundler
-      .build({
-        entrypoint: '/src/index.js',
-      })
-      .then((result) => {
-        const message: BuildSuccessResponse = {
-          result,
-          wrappedJs: wrapCommonJS(result.js),
-        };
-        data.port.postMessage(message);
-        log("build:done", result);
-      })
-      .catch((err: Error & { errors?: (PartialMessage | Error)[] }) => {
-        data.port.postMessage({ errors: err.errors || [err] });
+    bundler.config.entrypoint = '/src/index.js';
 
-        log(`build:error ${err}`);
-        // if (err.errors?.length) {
-        //   err.errors.forEach((error, index, errors) => {
-        //     let msg = 'text' in error ? error.text : String(error);
-        //     let pos = 'location' in error && error.location ? ` (${error.location.file}:${error.location.line}:${error.location.column})` : '';
-        //     log(`build:error ${index + 1}/${errors.length}`, msg, pos);
-        //   })
-        // } else {
-        //   log(err);
-        // }
-      });
+    try {
+      const result = await bundler.build()
+      const message: BuildSuccessResponse = {
+        result,
+        wrappedJs: wrapCommonJS(result.js),
+      };
+      data.port.postMessage(message);
+      log("build:done", result);
 
+    } catch (_err) {
+      const err = _err as Error & { errors?: (PartialMessage | Error)[] }
+      data.port.postMessage({ errors: err.errors || [err] });
+
+      log(`build:error ${err}`);
+      // if (err.errors?.length) {
+      //   err.errors.forEach((error, index, errors) => {
+      //     let msg = 'text' in error ? error.text : String(error);
+      //     let pos = 'location' in error && error.location ? ` (${error.location.file}:${error.location.line}:${error.location.column})` : '';
+      //     log(`build:error ${index + 1}/${errors.length}`, msg, pos);
+      //   })
+      // } else {
+      //   log(err);
+      // }
+    }
     data.port.close();
   });
   self.postMessage(newWorkerReadyMessage());

@@ -1,8 +1,8 @@
 import path from "path";
 import TarStream from 'tar-stream';
-import { rethrowWithPrefix, memoAsync, toPairs, listToTestFn } from "./utils.js";
+import { rethrowWithPrefix, memoAsync, toPairs, listToTestFn, separateNpmPackageNameVersion } from "./utils.js";
 import { makeParallelTaskMgr } from "./parallelTask.js";
-import semver from "semver";
+import { maxSatisfying, satisfies } from "semver";
 import { EventEmitter } from "./EventEmitter.js";
 import type { BundlerInBrowser } from "./BundlerInBrowser.js";
 
@@ -136,11 +136,11 @@ export class MiniNPM {
 
       const version = cachedSemverResult[`${name}@${versionRange}`] ||= await (async () => {
         const installedVersions = installedLUT[name]
-        const exist = (installedVersions && semver.maxSatisfying(Object.keys(installedVersions), versionRange))
+        const exist = (installedVersions && maxSatisfying(Object.keys(installedVersions), versionRange))
         if (exist) return exist;
 
         const allVersions = await this.getPackageVersions(name);
-        const ret = allVersions.tags[versionRange] || semver.maxSatisfying(allVersions.versions, versionRange)
+        const ret = allVersions.tags[versionRange] || maxSatisfying(allVersions.versions, versionRange)
         if (!ret) return null; // not found
 
         // double check: if prev installed "foo@2.6.0" (required via "foo@^2.0.0"),
@@ -156,7 +156,7 @@ export class MiniNPM {
             let killed = 0;
             const dependents = toPairs(dep.dependents);
             dependents.forEach(([dependentId, versionRange]) => {
-              if (!semver.satisfies(ret, versionRange)) return;
+              if (!satisfies(ret, versionRange)) return;
 
               // heck! need move to `ret`
               delete dep.dependents[dependentId];
@@ -275,10 +275,32 @@ export class MiniNPM {
     this.fs.writeFileSync(lockFilePath, JSON.stringify(lockFile, null, 2));
   }
 
+  async isAlreadySatisfied(rootDependencies: { [name: string]: string }) {
+    const lockFile = await this.readLockFile();
+    if (!lockFile) return false;
+
+    const hoisted = {} as Record<string, string>; // { "foo" "1.2.3" }
+    lockFile.hoisted.forEach(id => {
+      const [name, version] = separateNpmPackageNameVersion(id);
+      hoisted[name] = version;
+    })
+
+    for (const [name, query] of Object.entries(rootDependencies)) {
+      if (!hoisted[name]) return false;
+      if (query === '*' || query === 'latest') continue;
+
+      if (!satisfies(hoisted[name], query)) return false;
+    }
+
+    return true;
+  }
+
   /**
-   * install lots of npm package
+   * install npm packages.
    * 
    * using symlink to save disk space. be careful with bundlers resolving
+   * 
+   * @remarks - use `isAlreadySatisfied()` to avoid unnecessary install
    */
   async install(rootDependencies: { [name: string]: string }) {
     const prevLockFile = await this.readLockFile();

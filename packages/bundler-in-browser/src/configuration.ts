@@ -27,8 +27,14 @@ export function getDefaultBuildConfiguration() {
        * test file path or a function to test file path.
        * 
        * @example /\.css([?#!].*)?$/i
+       * @example args => /\.(s[ac]ss|css)$/i.test(bundler.pluginUtils.stripQuery(args.path))
        */
       test: RegExp | ((args: esbuild.OnLoadArgs) => boolean),
+      /**
+       * process the file, modify `result`
+       * 
+       * @remarks - use `bundler.pluginUtils.contentsToString(result.contents)` to read as string
+       */
       process: (args: esbuild.OnLoadArgs, result: esbuild.OnLoadResult) => void | Promise<void>
     }>,
 

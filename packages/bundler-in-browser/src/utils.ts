@@ -45,6 +45,24 @@ export function pathToNpmPackage(fullPath: string): [packageName: string, import
   return [packageName, importedPath];
 }
 
+/**
+ * given a name with version, like `foo@^1.2.3`, 
+ * 
+ * return `['foo', '^1.2.3']`
+ */
+export function separateNpmPackageNameVersion(nameWithVersion: string, defaultVersion = 'latest'): [packageName: string, version: string] {
+  const atIndex = nameWithVersion.indexOf('@', 1);
+  if (atIndex !== -1) {
+    return [nameWithVersion.slice(0, atIndex), nameWithVersion.slice(atIndex + 1)];
+  }
+  return [nameWithVersion, defaultVersion];
+}
+
+/**
+ * remove query string from path. eg: `/foo/bar.js?foo=bar` -> `/foo/bar.js`
+ */
+export const stripQuery = (path: string) => path.replace(/[?#!].*$/, '');
+
 /** 
  * wrap a commonjs `code` into a IIFE expression. its value is exactly what `module.exports` is.
  * 
