@@ -109,6 +109,27 @@ bundler.events.on("npm:install:done", () => console.log("[npm] install:done"));
 bundler.events.on("npm:packagejson:update", (newPackageJSON) => console.log("[newPackageJSON]", newPackageJSON));
 ```
 
+### patching packages
+
+you can modify package.json before installing it, by adding `bundler.npm.options.packageJsonPatches`.
+
+```js
+bundler.npm.options.packageJsonPatches.push((json) => {
+  if (json.name === "antd") {
+    // bundling "antd" is too slow, so we just use the minified & bundled version
+
+    json.main = "dist/antd.min.js";
+    delete json.module; // avoid using es modules
+
+    json.dependencies = {
+      // remove all dependencies, except for "dayjs"
+      dayjs: json.dependencies.dayjs,
+    };
+    return json;
+  }
+});
+```
+
 ## Vendor Bundle
 
 bundler-in-browser will bundle downloaded npm packages into a dll (vendor bundle). it's separated from user code, and can be reused.
