@@ -1,4 +1,4 @@
-# External Libraries
+# Use External Libraries
 
 bundler-in-browser allows user to `import` from npm, or your pre-defined modules.
 
