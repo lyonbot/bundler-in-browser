@@ -26,8 +26,8 @@ export function getDefaultBuildConfiguration() {
       /**
        * test file path or a function to test file path.
        * 
-       * @example /\.css([?#!].*)?$/i
-       * @example args => /\.(s[ac]ss|css)$/i.test(bundler.pluginUtils.stripQuery(args.path))
+       * @example /\.css$/i
+       * @example args => /\.css$/.test(args.path) && args.suffix.includes('?type=xxx')
        */
       test: RegExp | ((args: esbuild.OnLoadArgs) => boolean),
       /**

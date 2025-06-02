@@ -360,6 +360,7 @@ export class BundlerInBrowser {
 
   /** utils that plugin developers may use */
   pluginUtils = {
+    /** remove `?` query from path. useful for onResolve plugins */
     stripQuery,
 
     /** for post processors - convert contents to string */

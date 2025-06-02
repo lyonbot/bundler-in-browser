@@ -35,9 +35,9 @@ export default function installTailwindPlugin(bundler: BundlerInBrowser, options
   const processor = postcss();
   bundler.config.postProcessors.push({
     name: "tailwindcss",
-    test: args => /\.(s[ac]ss|css)$/i.test(bundler.pluginUtils.stripQuery(args.path)),
+    test: /\.(s[ac]ss|css)$/i,
     process: async (args, result) => {
-      const filePath = bundler.pluginUtils.stripQuery(args.path);
+      const filePath = args.path;
       const content = bundler.pluginUtils.contentsToString(result.contents);
 
       try {

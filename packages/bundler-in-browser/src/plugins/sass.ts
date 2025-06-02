@@ -6,8 +6,8 @@ export default function installSassPlugin(bundler: BundlerInBrowser) {
   const plugin: esbuild.Plugin = {
     name: "sass-loader",
     setup(build) {
-      build.onLoad({ filter: /\.scss($|\?)/ }, async (args) => {
-        let fullPath = bundler.pluginUtils.stripQuery(args.path);
+      build.onLoad({ filter: /\.scss$/ }, async (args) => {
+        let fullPath = args.path;
         let contents = bundler.fs.readFileSync(fullPath, 'utf8') as string;
         let result = await sass.compileStringAsync(contents, {
           style: 'expanded'

@@ -4,18 +4,19 @@ import { type Position } from '@vue/compiler-core';
 import type { BundlerInBrowser } from "../BundlerInBrowser.js";
 import type esbuild from "esbuild-wasm";
 import path from "path";
-import { memoAsync } from '../utils.js';
+import { memoAsync, stripQuery } from '../utils.js';
 
 const COMP_IDENTIFIER = '__vue_component__';
 function getFullPath(args: esbuild.OnResolveArgs) {
-  return path.isAbsolute(args.path) ? args.path : path.join(args.resolveDir || path.dirname(args.importer), args.path);
+  let filePath = stripQuery(args.path);
+  return path.isAbsolute(filePath) ? filePath : path.join(args.resolveDir || path.dirname(args.importer), filePath);
 }
 
 function getUrlParams(search: string): Record<string, string> {
   let hashes = search.slice(search.indexOf('?') + 1).split('&')
   return hashes.reduce((params, hash) => {
     let [key, val] = hash.split('=')
-    return Object.assign(params, { [key]: decodeURIComponent(val) })
+    return Object.assign(params, { [key]: decodeURIComponent(val || '') })
   }, {})
 }
 

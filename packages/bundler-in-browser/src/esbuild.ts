@@ -90,9 +90,8 @@ export function createESBuildNormalLoader(bundler: BundlerInBrowser): esbuild.Pl
   return ({
     name: "normal-loader",
     setup(build) {
-      build.onLoad({ filter: /\.([mc]?jsx?|tsx?|css|json|txt)($|\?)/ }, async (args) => {
-
-        let fullPath = stripQuery(args.path);
+      build.onLoad({ filter: /\.([mc]?jsx?|tsx?|css|json|txt)$/ }, async (args) => {
+        let fullPath = args.path;
         let suffix = fullPath.split('.').pop()!;
         let loader: esbuild.Loader = 'js';
 
@@ -111,7 +110,7 @@ export function createESBuildNormalLoader(bundler: BundlerInBrowser): esbuild.Pl
         return await bundler.pluginUtils.applyPostProcessors(args, result);
       })
 
-      build.onLoad({ filter: /\.(png|jpe?g|gif|svg|webp)($|\?)/ }, async (args) => {
+      build.onLoad({ filter: /\.(png|jpe?g|gif|svg|webp)$/ }, async (args) => {
         return {
           contents: fs.readFileSync(args.path),
           loader: 'dataurl'
@@ -136,15 +135,16 @@ export function createESBuildResolver(bundler: BundlerInBrowser): esbuild.Plugin
     name: "resolve",
     setup(build) {
       build.onResolve({ filter: /.*/ }, async (args) => {
-        let fullPath = args.path;
-        if (/^(https?:)\/\/|^data:/.test(fullPath)) return { external: true, path: fullPath }; // URL is external
+        let fullPath = stripQuery(args.path);
+        let suffix = args.path.slice(fullPath.length);
+        if (/^(https?:)\/\/|^data:/.test(fullPath)) return { external: true, path: fullPath, suffix }; // URL is external
 
         return await new Promise((done, reject) => {
           resolve(args.resolveDir || dirname(args.importer), fullPath, (err, res) => {
             if (err) return reject(err);
             if (!res) return reject(new Error(`Cannot resolve ${fullPath}`));
 
-            else done({ path: res });
+            else done({ path: res, suffix });
           })
         });
       });
