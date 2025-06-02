@@ -13,6 +13,15 @@ export namespace MiniNPM {
     useJSDelivrToQueryVersions?: boolean;
     concurrency?: number;
     blocklist?: (string | RegExp)[]; // packages won't be installed
+    packageJsonPatches?: Array<(json: PackageJsonLike) => PackageJsonLike | void>;
+  }
+
+  export interface PackageJsonLike {
+    name: string;
+    version: string;
+    dependencies?: Record<string, string>;
+    [symPatched]?: true;
+    [key: string]: any;
   }
 
   export interface PkgIndex {
@@ -52,6 +61,8 @@ export namespace MiniNPM {
   }
 }
 
+const symPatched = 'bnb:patched';
+
 /**
  * a minimal npm client, which only supports installing packages.
  * 
@@ -83,6 +94,7 @@ export class MiniNPM {
       useJSDelivrToQueryVersions: false,
       concurrency: 5,
       blocklist: [],
+      packageJsonPatches: [],
       ...options,
     };
   }
@@ -408,13 +420,24 @@ export class MiniNPM {
     // return `${this.options.registryUrl}/${packageName}/-/${packageName}-${version}.tgz`;
   }
 
-  getPackageJson(packageName: string, version: string): Promise<any> {
+  async getPackageJson(packageName: string, version: string): Promise<MiniNPM.PackageJsonLike> {
     const handler =
       this.options.useJSDelivrToQueryVersions
         ? this.getPackageJsonDirectly
         : this.getPackageJsonViaVersions
 
-    return handler(packageName, version);
+    const answer = await handler(packageName, version)
+    return this.patchPackageJson(answer);
+  }
+
+  patchPackageJson(packageJson: MiniNPM.PackageJsonLike): MiniNPM.PackageJsonLike {
+    if (symPatched in packageJson) return packageJson;
+
+    packageJson[symPatched] = true;
+    this.options.packageJsonPatches.forEach(patch => {
+      packageJson = patch(packageJson) || packageJson;
+    });
+    return packageJson;
   }
 
   cachedFetchJson = memoAsync(async (url: string) => {
@@ -529,9 +552,16 @@ export class MiniNPM {
       }
 
       // make dir recrusive
-      fs.mkdirSync(path.dirname(fileName), { recursive: true });
+      const dirName = path.dirname(fileName);
+      if (dirName) fs.mkdirSync(dirName, { recursive: true });
 
-      const data = inflated.slice(dataOffset, dataOffset + header.size!);
+      let data = inflated.slice(dataOffset, dataOffset + header.size!);
+      if (fileName === 'package.json') {
+        const str = new TextDecoder().decode(data);
+        let json = JSON.parse(str) as MiniNPM.PackageJsonLike;
+        json = this.patchPackageJson(json);
+        fs.writeFileSync(fileName, JSON.stringify(json, null, 2));
+      }
       fs.writeFileSync(fileName, data);
       // if (header.name === 'package/package.json') packageJson = JSON.parse(decodeUTF8(data));
 

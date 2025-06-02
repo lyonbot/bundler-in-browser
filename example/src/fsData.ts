@@ -10,7 +10,9 @@ const el = document.createElement('div');
 document.body.appendChild(el);
 createApp(App).mount(el);
 
-setInterval(() => { confetti() }, 3000);
+setInterval(() => { 
+  if (document.visibilityState === 'visible') confetti();
+}, 3000);
 confetti();
 
 // uncomment to test React + CodeMirror + module-css + TailwindCSS
