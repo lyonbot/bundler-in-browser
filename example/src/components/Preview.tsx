@@ -121,7 +121,7 @@ export const Preview: React.FC<PreviewProps> = ({ onFileSelect }) => {
           border: "none",
           backgroundColor: "#fff",
         }}
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
       />
       <NPMProgressView />
       <BuildErrorView onFileSelect={onFileSelect} />
