@@ -14,5 +14,5 @@ A powerful in-browser bundler that automatically installs npm packages, powered 
 
 ## Packages
 
-- [bundler-in-browser](./packages/bundler-in-browser): the core bundler
+- [bundler-in-browser](./packages/bundler-in-browser): the core bundler, and vue / sass plugins
 - [@bundler-in-browser/tailwindcss](./packages/tailwindcss): TailwindCSS plugin for bundler-in-browser

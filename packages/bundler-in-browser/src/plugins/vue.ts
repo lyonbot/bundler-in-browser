@@ -110,24 +110,46 @@ export interface InstallVuePluginOptions {
   disableOptionsApi?: boolean;
   enableProdDevTools?: boolean;
   enableHydrationMismatchDetails?: boolean;
+
+  /** whether inject HMR related code `__VUE_HMR_RUNTIME__.createRecord(hmrId, sfcMain)` */
+  hmr?: boolean;
+
+  /** 
+   * custom HMR id generator. works with `hmr: true`.
+   * 
+   * defaults to `filePath => filePath` */
+  hmrId?: (filePath: string) => string | Promise<string>;
+}
+
+export interface VuePluginInstance {
+  options: Required<InstallVuePluginOptions>;
+  plugin: esbuild.Plugin;
 }
 
 export default function installVuePlugin(bundler: BundlerInBrowser, opts: InstallVuePluginOptions = {}) {
-  const vendorPlugin: esbuild.Plugin = {
-    name: "vue-loader-vendor",
+  const instance: VuePluginInstance = {
+    options: {
+      disableOptionsApi: false,
+      enableProdDevTools: false,
+      enableHydrationMismatchDetails: false,
+      hmr: false,
+      hmrId: (filePath: string) => filePath,
+      ...opts,
+    },
+    plugin: null as unknown as esbuild.Plugin, // assign later
+  };
+
+  const plugin: esbuild.Plugin = {
+    name: "vue-loader",
     setup(build) {
+      const opts = instance.options;
       build.initialOptions.define = {
         "__VUE_OPTIONS_API__": opts.disableOptionsApi ? "false" : "true",
         "__VUE_PROD_DEVTOOLS__": opts.enableProdDevTools ? "true" : "false",
         "__VUE_PROD_HYDRATION_MISMATCH_DETAILS__": opts.enableHydrationMismatchDetails ? "true" : "false",
         ...build.initialOptions.define,
       }
-    }
-  }
 
-  const plugin: esbuild.Plugin = {
-    name: "vue-loader",
-    setup(build) {
       const isProd = build.initialOptions.minify !== false;
 
       // Resolve main ".vue" import
@@ -340,6 +362,15 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           );
         }
 
+        // hmr
+        if (instance.options.hmr) {
+          const hmrIdEscaped = JSON.stringify(String(await instance.options.hmrId(filename)))
+          outCodeParts.push(
+            `${COMP_IDENTIFIER}.__hmrId = ${hmrIdEscaped};`,
+            `typeof __VUE_HMR_RUNTIME__ !== 'undefined' && __VUE_HMR_RUNTIME__.createRecord(${hmrIdEscaped}, ${COMP_IDENTIFIER});`,
+          );
+        }
+
         // misc
         {
           if (scopeId) outCodeParts.push(`${COMP_IDENTIFIER}.__scopeId = ${JSON.stringify(scopeId)}`);
@@ -366,8 +397,10 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
     }
   }
 
-  bundler.userCodePlugins.push(plugin);
-  bundler.vendorPlugins.push(vendorPlugin);
+  instance.plugin = plugin;
+  bundler.commonPlugins.push(plugin);
+
+  return instance;
 }
 
 const getPreprocessCustomRequireWithSass = memoAsync(async () => {

@@ -102,7 +102,7 @@ await installSassPlugin(bundler);
 
 ### Vue 3 Support
 
-Add support for Vue 3 Single File Components (`.vue` files):
+Add support for Vue 3 Single File Components (`.vue` files). More details [can be found here](./cookbook/vue.md).
 
 ```ts
 import { BundlerInBrowser, installVuePlugin } from "bundler-in-browser";
@@ -134,3 +134,7 @@ bundler-in-browser allows user to `import` from npm, or your pre-defined modules
 ### [**📘 Under the Hood**](./cookbook/under-the-hood.md)
 
 ↑ click title to learn how `bundler.build()` works.
+
+### [**📘 Vue**](./cookbook/vue.md)
+
+↑ click title to learn how to use Vue SFC, including options, HMR etc.

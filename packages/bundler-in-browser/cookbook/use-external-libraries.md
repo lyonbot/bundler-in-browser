@@ -9,6 +9,8 @@ You can add pre-defined modules into `bundler.config.externals`, so that bundler
 Then in the built code, there will be `require("your-module")` or `require("your-module/path/to/file")`, depends on how user code imports.
 All you need is to prepend a `require` function before the bundled user code.
 
+There is also a example to refer: [reuse `vue` from your app](./vue.md#reuse-vue-from-your-app).
+
 ```js
 import { BundlerInBrowser, wrapCommonJS } from "bundler-in-browser";
 import { fs } from "@zenfs/core";
@@ -115,6 +117,11 @@ you can modify package.json before installing it, by adding `bundler.npm.options
 
 ```js
 bundler.npm.options.packageJsonPatches.push((json) => {
+  if (json.name === "vue") {
+    json.dependencies = {}; // remove all dependencies - not used in the browser
+    return json;
+  }
+
   if (json.name === "antd") {
     // bundling "antd" is too slow, so we just use the minified & bundled version
 
