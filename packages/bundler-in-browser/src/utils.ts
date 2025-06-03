@@ -61,7 +61,11 @@ export function separateNpmPackageNameVersion(nameWithVersion: string, defaultVe
 /**
  * remove query string from path. eg: `/foo/bar.js?foo=bar` -> `/foo/bar.js`
  */
-export const stripQuery = (path: string) => path.replace(/[?#!].*$/, '');
+export const stripQuery = (path: string) => {
+  const queryIndex = path.indexOf('?');
+  if (queryIndex !== -1) return path.slice(0, queryIndex);
+  return path;
+}
 
 /** 
  * wrap a commonjs `code` into a IIFE expression. its value is exactly what `module.exports` is.

@@ -120,10 +120,12 @@ export function createESBuildNormalLoader(bundler: BundlerInBrowser): esbuild.Pl
   });
 }
 
-export function createESBuildResolver(bundler: BundlerInBrowser): esbuild.Plugin {
+export function createESBuildResolver(bundler: BundlerInBrowser, options: {
+  onResolved?: (args: esbuild.OnResolveArgs, target: string) => void
+} = {}): esbuild.Plugin {
   const { fs, config: { extensions } } = bundler;
 
-  const resolve = createResolver({
+  const invokeResolver = createResolver({
     fileSystem: fs as any,
     extensions: extensions.slice(),
     mainFields: ['module', 'browser', 'main'],
@@ -139,12 +141,13 @@ export function createESBuildResolver(bundler: BundlerInBrowser): esbuild.Plugin
         let suffix = args.path.slice(fullPath.length);
         if (/^(https?:)\/\/|^data:/.test(fullPath)) return { external: true, path: fullPath, suffix }; // URL is external
 
-        return await new Promise((done, reject) => {
-          resolve(args.resolveDir || dirname(args.importer), fullPath, (err, res) => {
+        return await new Promise((resolve, reject) => {
+          invokeResolver(args.resolveDir || dirname(args.importer), fullPath, (err, res) => {
             if (err) return reject(err);
             if (!res) return reject(new Error(`Cannot resolve ${fullPath}`));
 
-            else done({ path: res, suffix });
+            if (options.onResolved) options.onResolved(args, res);
+            resolve({ path: res, suffix });
           })
         });
       });
