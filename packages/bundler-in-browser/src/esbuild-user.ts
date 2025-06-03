@@ -11,6 +11,7 @@ import { pathToNpmPackage, stripQuery } from "./utils.js";
 export class UserCodeEsbuildHelper extends EsbuildHelper<BuildUserCodeResult> {
   npmRequired: Set<string> = new Set();
   vendorImportedPaths: Map<string, string[]> = new Map(); // { "lodash/debounce": ["/src/1.js", "/src/2.js"] }
+  userFileDependents: Map<string, string[]> = new Map(); // { "/src/utils.js": ["/src/1.js", "/src/2.js"] }
 
   override makeEsbuildOptions() {
     const { bundler } = this;
@@ -49,7 +50,13 @@ export class UserCodeEsbuildHelper extends EsbuildHelper<BuildUserCodeResult> {
         ...bundler.userCodePlugins,
         npmCollectPlugin(),
         ...bundler.commonPlugins,
-        createESBuildResolver(bundler),
+        createESBuildResolver(bundler, {
+          onResolved: (args, target) => {
+            let arr = this.userFileDependents.get(target);
+            if (!arr) this.userFileDependents.set(target, arr = []);
+            arr.push(args.importer);
+          }
+        }),
         createESBuildNormalLoader(bundler),
       ],
     };
@@ -61,6 +68,7 @@ export class UserCodeEsbuildHelper extends EsbuildHelper<BuildUserCodeResult> {
     super.baseBeforeBuild();
     this.npmRequired.clear();
     this.vendorImportedPaths.clear();
+    this.userFileDependents.clear();
   }
 
   override async build(): Promise<BuildUserCodeResult> {
@@ -69,6 +77,7 @@ export class UserCodeEsbuildHelper extends EsbuildHelper<BuildUserCodeResult> {
       ...baseResult,
       npmRequired: Array.from(this.npmRequired),
       vendorImportedPaths: new Map(this.vendorImportedPaths),
+      userFileDependents: new Map(this.userFileDependents),
     }
   }
 }
@@ -77,6 +86,17 @@ export interface BuildUserCodeResult extends BaseBuildResult {
   /** npm packages required by user code */
   npmRequired: string[];
 
-  /** imported vendor paths and assets */
+  /** 
+   * imported vendor paths and their dependents 
+   * 
+   *  eg: { "lodash/debounce": ["/src/1.js", "/src/2.js"] }
+   */
   vendorImportedPaths: Map<string, string[]>;
+
+  /** 
+   * user file's dependents 
+   * 
+   *  eg: { "/src/utils.js": ["/src/1.js", "/src/2.js"] }
+   */
+  userFileDependents: Map<string, string[]>;
 }
