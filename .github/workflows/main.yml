@@ -21,6 +21,9 @@ jobs:
           npm install -g pnpm@10.11.0
           pnpm install
           pnpm run build
+
+      - name: Test
+        run: |
           pnpm run test
 
       - name: Upload static files as artifact

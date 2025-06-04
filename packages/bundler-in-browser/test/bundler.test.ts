@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { wrapCommonJS } from '../src/utils.js';
-import { createBundlerForTest, hookMiniNpm } from './testutil.js';
+import { createBundlerForTest, hookMiniNpm, initializeEsbuild } from './testutil.js';
 
 describe('bundler', () => {
+  beforeAll(async () => {
+    await initializeEsbuild();
+  })
+
   it('works', async () => {
     const { bundler } = await createBundlerForTest({
       '/src/index.js': `
