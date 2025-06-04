@@ -341,6 +341,7 @@ export class BundlerInBrowser {
       js: bundle.js || '',
       css: bundle.css || '',
       externals: Array.from(bundle.externals || []),
+      exportPaths: Array.from(bundle.exportPaths || []),
       esbuildOutput: undefined, // FIXME: do we really need this?
     }
 
