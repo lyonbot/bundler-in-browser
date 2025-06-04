@@ -33,5 +33,5 @@ export default defineConfig({
       fileName: 'index',
       name: 'BundlerInBrowser'
     }
-  }
+  },
 })
