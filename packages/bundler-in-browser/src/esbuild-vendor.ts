@@ -1,5 +1,5 @@
 import type esbuild from "esbuild-wasm";
-import { createESBuildNormalLoader, createESBuildResolver, EsbuildHelper, guessEntrypoint, type BaseBuildResult } from "./esbuild.js";
+import { createESBuildNormalLoader, createESBuildResolver, EsbuildHelper, type BaseBuildResult } from "./esbuild.js";
 import { escapeRegExp } from "./utils.js";
 import type { BundlerInBrowser } from "./BundlerInBrowser.js";
 

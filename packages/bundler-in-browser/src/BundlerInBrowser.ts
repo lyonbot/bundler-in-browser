@@ -155,7 +155,7 @@ export class BundlerInBrowser {
    * @returns new package.json object
    */
   async addDepsToPackageJson(dependencies: string[]) {
-    const { fs, events } = this;
+    const { fs } = this;
     const path = '/package.json'
     const rootPackageJson = {
       name: 'root',
@@ -170,7 +170,7 @@ export class BundlerInBrowser {
         Object.assign(rootPackageJson, data);
         if (!rootPackageJson.dependencies) rootPackageJson.dependencies = {};
       }
-    } catch (err) {
+    } catch {
       // Silent fail, package.json is optional
     }
 

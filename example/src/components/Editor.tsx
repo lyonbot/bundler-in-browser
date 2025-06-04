@@ -1,6 +1,6 @@
-import React, { useContext, useState } from "react";
+import React from "react";
 import MonacoEditor from "@monaco-editor/react";
-import { FileSystemContext } from "../contexts/FileSystemContext";
+
 
 interface Tab {
   path: string;

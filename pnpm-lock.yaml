@@ -11,6 +11,9 @@ importers:
       '@changesets/cli':
         specifier: ^2.29.4
         version: 2.29.4
+      oxlint:
+        specifier: ^0.17.0
+        version: 0.17.0
 
   example:
     dependencies:
@@ -548,6 +551,46 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@oxlint/darwin-arm64@0.17.0':
+    resolution: {integrity: sha512-py/N0yTMbdy5Kd1RFMMgFqzO5Qwc5MbHSCA0BvSx/GnC3n7yPstcEFSSdZzb+HaANI00xn4dwjYo6HVEFHhuWA==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@oxlint/darwin-x64@0.17.0':
+    resolution: {integrity: sha512-rQUFu6Ci8gmBHTgb2EMKYNZWCmBB8sSW7SAxBes9k0esonKsioDNjT51CsfKZhXyaMtaM70hiVhSCBc0NqUEJg==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@oxlint/linux-arm64-gnu@0.17.0':
+    resolution: {integrity: sha512-NoAWscdfVj6Sci3NdbHHc1OivSSKpwtkLff5SoAM8XgJ9t7flf+zW7XOy3OeSgZAxNbcF4QGruv+XcBLR7tWMA==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@oxlint/linux-arm64-musl@0.17.0':
+    resolution: {integrity: sha512-VQRmSdbuc0rpSZoLqdhKJG9nUjJmEymOU60dO3lKlCT5YXME4dxA+jf1AigtnmJS5FgOxQm54ECF9lh6dyP0ew==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@oxlint/linux-x64-gnu@0.17.0':
+    resolution: {integrity: sha512-KcaXWkBfqt7weerU1EXJysEupEHB8AtJytufBOQMuLE5vx2OoAbjAk0vt2V14W8Lss9Sz+ET7nXo6ZAEku4vCA==}
+    cpu: [x64]
+    os: [linux]
+
+  '@oxlint/linux-x64-musl@0.17.0':
+    resolution: {integrity: sha512-yWbFXWKKTrH4zR0FI1V6KDJp5NqOLFe1LZbKNeaoS1wtq5/aFPeM+d9dttGLoA5u6G9uhIK/nSnrPmtuNLPU4Q==}
+    cpu: [x64]
+    os: [linux]
+
+  '@oxlint/win32-arm64@0.17.0':
+    resolution: {integrity: sha512-zdoB3mbvcx3eGOh6ElPJ01S2MOzyZo/gijeHw7yb2PXcRis+3clVje6kpnG7/TN69zoHv7WwDX6poJu8FURTqg==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@oxlint/win32-x64@0.17.0':
+    resolution: {integrity: sha512-gxVYAOy/8IAWgmsaXDxRJvOr7l61DUDj6s7tXImzXqBAH/An6yJZGr1tR+5BsACVw/3hcCPOUbotXGS4+vZNZQ==}
+    cpu: [x64]
+    os: [win32]
 
   '@parcel/watcher-android-arm64@2.5.1':
     resolution: {integrity: sha512-KF8+j9nNbUN8vzOFDpRMsaKBHZ/mcjEjMToVMJOhTozkDonQFFrRcfdLWn6yWKCmJKmdVxSgHiYvTCef4/qcBA==}
@@ -1529,6 +1572,11 @@ packages:
 
   outdent@0.5.0:
     resolution: {integrity: sha512-/jHxFIzoMXdqPzTaCpFzAAWhpkSjZPF4Vsn6jAfNpmbH/ymsmd7Qc6VE9BGn0L6YMj6uwpQLxCECpus4ukKS9Q==}
+
+  oxlint@0.17.0:
+    resolution: {integrity: sha512-LCXomDhPGbDUZ/T+ScFA0tjh7A5QgYwPRCw7XFlJxRD2URBV8wj2lLvepbQ9yS/Q6SGhVfHQMpziQytajl8NcQ==}
+    engines: {node: '>=8.*'}
+    hasBin: true
 
   p-filter@2.1.0:
     resolution: {integrity: sha512-ZBxxZ5sL2HghephhpGAQdoskxplTwr7ICaehZwLIlfL6acuVgZPm8yBNuRAFBGEqtD/hmUeq9eqLg2ys9Xr/yw==}
@@ -2540,6 +2588,30 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.19.1
 
+  '@oxlint/darwin-arm64@0.17.0':
+    optional: true
+
+  '@oxlint/darwin-x64@0.17.0':
+    optional: true
+
+  '@oxlint/linux-arm64-gnu@0.17.0':
+    optional: true
+
+  '@oxlint/linux-arm64-musl@0.17.0':
+    optional: true
+
+  '@oxlint/linux-x64-gnu@0.17.0':
+    optional: true
+
+  '@oxlint/linux-x64-musl@0.17.0':
+    optional: true
+
+  '@oxlint/win32-arm64@0.17.0':
+    optional: true
+
+  '@oxlint/win32-x64@0.17.0':
+    optional: true
+
   '@parcel/watcher-android-arm64@2.5.1':
     optional: true
 
@@ -3460,6 +3532,17 @@ snapshots:
   os-tmpdir@1.0.2: {}
 
   outdent@0.5.0: {}
+
+  oxlint@0.17.0:
+    optionalDependencies:
+      '@oxlint/darwin-arm64': 0.17.0
+      '@oxlint/darwin-x64': 0.17.0
+      '@oxlint/linux-arm64-gnu': 0.17.0
+      '@oxlint/linux-arm64-musl': 0.17.0
+      '@oxlint/linux-x64-gnu': 0.17.0
+      '@oxlint/linux-x64-musl': 0.17.0
+      '@oxlint/win32-arm64': 0.17.0
+      '@oxlint/win32-x64': 0.17.0
 
   p-filter@2.1.0:
     dependencies:

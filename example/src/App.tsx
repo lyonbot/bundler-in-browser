@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext } from "react";
 import { ResizablePanel } from "./components/ResizablePanel";
 import { FileExplorer } from "./components/FileExplorer";
 import { Editor } from "./components/Editor";
@@ -38,7 +38,7 @@ const App: React.FC = () => {
           })
           editor.revealLineInCenter(location.line)
         }
-      } catch (e) {
+      } catch {
         // ignore
       }
     }, 50)
@@ -67,7 +67,7 @@ const App: React.FC = () => {
       monaco.editor.getModels().forEach((model: any) => {
         if (model.uri.path === path) model.dispose();
       });
-    } catch (e) {
+    } catch {
       // ignore
     }
   };

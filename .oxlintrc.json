@@ -1,0 +1,18 @@
+{
+  "env": {
+    "browser": true
+  },
+  "rules": {
+    "eqeqeq": "warn",
+    "no-eval": "off"
+  },
+  "overrides": [
+    {
+      "files": ["*.test.ts", "*.spec.ts"],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "off"
+      }
+    }
+  ],
+  "plugins": ["import", "typescript", "unicorn"]
+}

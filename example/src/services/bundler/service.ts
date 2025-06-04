@@ -1,3 +1,4 @@
+// eslint-disable default
 import { atom, createStore } from "jotai";
 import CompilerWorker from "./bundler.worker?worker";
 import {
@@ -11,7 +12,7 @@ import {
   type WorkerLogMessage,
 } from "./common";
 import { makePromise } from "yon-utils";
-import { BundlerInBrowser, MiniNPM } from "bundler-in-browser";
+import { MiniNPM } from "bundler-in-browser";
 
 /**
  * Service class handling compilation operations using Web Workers

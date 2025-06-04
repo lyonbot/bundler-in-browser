@@ -15,7 +15,7 @@ const WithAutoFileLink = memo((props: { text: string } & OutputPanelProps) => {
 
   const nodes = useMemo(() => {
     const ans: React.ReactNode[] = [];
-    const re = /((?:^|\/)src\/[^\s:]+)(\:(\d+)\:(\d+))?/gm;
+    const re = /((?:^|\/)src\/[^\s:]+)(:(\d+):(\d+))?/gm;
     let match: RegExpExecArray | null;
     let lastIndex = 0;
 
