@@ -277,7 +277,7 @@ export class MiniNPM {
       if (!data) return null;
       const lockfile = JSON.parse(data as string) as MiniNPM.LockFile;
       return lockfile;
-    } catch (e) {
+    } catch {
       return null;
     }
   }

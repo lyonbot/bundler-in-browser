@@ -1,4 +1,4 @@
-import { fs, InMemory } from "@zenfs/core";
+import { fs } from "@zenfs/core";
 import { dirname } from "path";
 import dayjs from "dayjs";
 import esbuildWasmURL from "esbuild-wasm/esbuild.wasm?url";

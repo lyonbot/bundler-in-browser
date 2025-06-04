@@ -67,7 +67,6 @@ export default function installTailwindPlugin(bundler: BundlerInBrowser, options
 
         // console.log('tailwindcssPlugin: start scanning...');
         const toScanDirs = [rootDir];
-        let scanCount = 0;
         while (toScanDirs.length > 0) {
           const dir = toScanDirs.shift()!;
           try {
@@ -82,13 +81,12 @@ export default function installTailwindPlugin(bundler: BundlerInBrowser, options
                 const ext = name.split('.').pop();
                 const file = fs.readFileSync(path, 'utf-8') as string;
                 content.push({ extension: ext, content: file });
-                scanCount++;
-              } catch (e) {
+              } catch {
                 // maybe not a file.
                 toScanDirs.push(path);
               }
             }
-          } catch (e) {
+          } catch {
             // cannot readdir, skip
           }
         }
