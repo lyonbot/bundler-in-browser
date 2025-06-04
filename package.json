@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "pnpm run -r build",
+    "test": "pnpm run -r test",
     "start": "NODE_ENV=development pnpm run -r --parallel dev"
   },
   "keywords": [],

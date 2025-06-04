@@ -3,7 +3,7 @@ import path from 'path';
 import { memoAsync } from '../src/utils.js';
 import type { MiniNPM } from '../src/MiniNPM.js';
 import { InMemory, fs } from '@zenfs/core';
-import { BundlerInBrowser } from '../src/BundlerInBrowser.js';
+import { BundlerInBrowser } from 'bundler-in-browser';
 import esbuild from "esbuild-wasm";
 
 export function hookMiniNpm(npm: MiniNPM) {
