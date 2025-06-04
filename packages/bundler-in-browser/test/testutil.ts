@@ -106,10 +106,14 @@ export async function createBundlerForTest(files: Record<string, string>) {
   }
 
   const bundler = new BundlerInBrowser(fs);
-  bundler.initialized = _esbuildInitializePromise ||= esbuild.initialize({});
+  bundler.initialized = initializeEsbuild();
   // await bundler.initialize(); 
 
   return { fs, bundler }
+}
+
+export function initializeEsbuild() {
+  return _esbuildInitializePromise ||= esbuild.initialize({});
 }
 
 let _esbuildInitializePromise: Promise<any> | undefined;
