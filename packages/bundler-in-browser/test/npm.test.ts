@@ -35,7 +35,7 @@ describe('npm', () => {
     })
 
     // check hoisted
-    expect(fs.readdirSync('/node_modules')).toEqual([
+    expect(fs.readdirSync('/node_modules').sort()).toEqual([
       '.store',
       'dirty',
       'react',
@@ -45,10 +45,16 @@ describe('npm', () => {
     // ----------------------------------------------
     // root install dirty@2
 
+    expect(await npm.isAlreadySatisfied({ 'dirty': '*' })).toBe(true);
+    expect(await npm.isAlreadySatisfied({ 'dirty': '1' })).toBe(true);
+    expect(await npm.isAlreadySatisfied({ 'dirty': '^2.0.0' })).toBe(false);
+
     await npm.install({
       'react': 'latest',
       'dirty': '2.0.0',
     })
+
+    expect(await npm.isAlreadySatisfied({ 'dirty': '^2.0.0' })).toBe(true);
 
     expect(hook.ver('dirty')).toEqual('2.0.0')
     expect(hook.ver('react', 'dirty')).toEqual('1.2.0')
@@ -63,7 +69,7 @@ describe('npm', () => {
 
     expect(hook.ver('dirty')).toEqual('2.0.0')
     expect(hook.ver('react')).toEqual(null)
-    expect(fs.readdirSync('/node_modules/.store')).toEqual([
+    expect(fs.readdirSync('/node_modules/.store').sort()).toEqual([
       "dirty@2.0.0",
       "lock.json",
     ])

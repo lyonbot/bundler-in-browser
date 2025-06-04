@@ -2,6 +2,9 @@ import SemVer from 'semver';
 import path from 'path';
 import { memoAsync } from '../src/utils.js';
 import type { MiniNPM } from '../src/MiniNPM.js';
+import { InMemory, fs } from '@zenfs/core';
+import { BundlerInBrowser } from '../src/BundlerInBrowser.js';
+import esbuild from "esbuild-wasm";
 
 export function hookMiniNpm(npm: MiniNPM) {
   const $$latestVersion = Symbol('latestVersion')
@@ -35,7 +38,7 @@ export function hookMiniNpm(npm: MiniNPM) {
     if (files) {
       for (const [fileName, fileContent] of Object.entries(files)) {
         const fullPath = `${destDir}/${fileName}`
-        npm.fs.mkdirSync(path.basename(fullPath), { recursive: true })
+        npm.fs.mkdirSync(path.dirname(fullPath), { recursive: true })
         npm.fs.writeFileSync(fullPath, fileContent)
       }
     }
@@ -52,9 +55,11 @@ export function hookMiniNpm(npm: MiniNPM) {
   }
   npm.getPackageJson = memoAsync(async (name, version) => {
     let p = mockRegistry[name]?.[version]
-    if (!p) return null
+    if (!p) throw new Error(`package ${name}@${version} not found`)
 
     return {
+      name,
+      version,
       dependencies: {},
       ...p,
       dist: {
@@ -87,3 +92,24 @@ export function hookMiniNpm(npm: MiniNPM) {
     }
   }
 }
+
+/**
+ * create and initialize a BundlerInBrowser instance for testing
+ */
+export async function createBundlerForTest(files: Record<string, string>) {
+  fs.umount('/')
+  fs.mount('/', InMemory.create(files));
+
+  for (const file of Object.keys(files)) {
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, files[file])
+  }
+
+  const bundler = new BundlerInBrowser(fs);
+  bundler.initialized = _esbuildInitializePromise ||= esbuild.initialize({});
+  // await bundler.initialize(); 
+
+  return { fs, bundler }
+}
+
+let _esbuildInitializePromise: Promise<any> | undefined;

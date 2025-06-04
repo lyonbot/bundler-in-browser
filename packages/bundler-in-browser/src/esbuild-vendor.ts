@@ -102,6 +102,7 @@ export class VendorCodeEsbuildHelper extends EsbuildHelper<VendorBundleResult> {
     const baseResult = await super.baseBuild();
     return {
       hash,
+      exportPaths: this.config.exportPaths.slice(),
       ...baseResult,
     }
   }
@@ -114,4 +115,7 @@ export interface VendorBundleConfig {
 
 export interface VendorBundleResult extends BaseBuildResult {
   hash: string;
+
+  /** paths to export like ["lodash/debounce", "lodash/merge"] */
+  exportPaths: string[];
 }
