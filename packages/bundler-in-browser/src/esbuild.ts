@@ -128,8 +128,9 @@ export function createESBuildResolver(bundler: BundlerInBrowser, options: {
   const invokeResolver = createResolver({
     fileSystem: fs as any,
     extensions: extensions.slice(),
-    mainFields: ['module', 'browser', 'main'],
-    conditionNames: ['import', 'require'],
+    mainFields: ['browser', 'module', 'main'],
+    aliasFields: ['browser'],
+    conditionNames: ['browser', 'import', 'require'],
     symlinks: true,
   })
 
