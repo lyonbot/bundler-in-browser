@@ -1,0 +1,10 @@
+diff --git a/dist/index.browser.mjs b/dist/index.browser.mjs
+index 721c7c7509e53b6b9aed2274b7b89afca10facbf..ee9889692f810597bdf18ef58e8e7e2afcc13b25 100644
+--- a/dist/index.browser.mjs
++++ b/dist/index.browser.mjs
+@@ -1,3 +1,5 @@
+ import { VERSION, build, defineConfig, rolldown, watch } from "./src-BDIpxASO.js";
+ 
++export { __fs } from "./rolldown-binding.wasi-browser.js";
++
+ export { VERSION, build, defineConfig, rolldown, watch };

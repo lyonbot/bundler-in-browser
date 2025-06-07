@@ -1,3 +1,5 @@
 packages:
   - packages/*
   - example
+patchedDependencies:
+  '@rolldown/browser': patches/@rolldown__browser.patch
