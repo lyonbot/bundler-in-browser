@@ -1,6 +1,6 @@
 import type esbuild from "esbuild-wasm";
 import { createESBuildNormalLoader, createESBuildResolver, EsbuildHelper, type BaseBuildResult } from "./esbuild.js";
-import { escapeRegExp } from "./utils.js";
+import { escapeRegExp } from "./utils/string.js";
 import type { BundlerInBrowser } from "./BundlerInBrowser.js";
 
 const vendorDir = '/vendor_dll';

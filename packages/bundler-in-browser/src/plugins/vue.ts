@@ -4,7 +4,7 @@ import { type Position } from '@vue/compiler-core';
 import type { BundlerInBrowser } from "../BundlerInBrowser.js";
 import type esbuild from "esbuild-wasm";
 import path from "path";
-import { memoAsync, stripQuery } from '../utils.js';
+import { memoAsync, stripQuery } from '../utils/index.js';
 
 const COMP_IDENTIFIER = '__vue_component__';
 function getFullPath(args: esbuild.OnResolveArgs) {

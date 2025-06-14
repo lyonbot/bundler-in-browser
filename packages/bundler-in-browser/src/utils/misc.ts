@@ -1,0 +1,40 @@
+export const toSortedArray = (set: Iterable<string>) => Array.from(set).sort()
+
+export function isNil(obj: any): obj is null | undefined {
+  return obj === null || obj === undefined;
+}
+
+export function isNotNil<T>(obj: T | null | undefined): obj is NonNullable<T> {
+  return obj !== null && obj !== undefined;
+}
+
+export function toArray<T>(obj: Iterable<T>): NonNullable<T>[]
+export function toArray<T>(obj: T): NonNullable<T>[]
+export function toArray<T>(obj: Iterable<T> | T): NonNullable<T>[] {
+  if (Array.isArray(obj)) return obj.filter(isNotNil) as NonNullable<T>[];
+  if (isNil(obj)) return [];
+  return [obj as NonNullable<T>];
+}
+
+export function cloneDeep<T>(obj: T): T {
+  if (typeof obj !== 'object' || obj === null) return obj;
+  if (Array.isArray(obj)) return obj.map(cloneDeep) as any;
+  if (obj instanceof Set) return new Set(Array.from(obj).map(cloneDeep)) as any;
+  return { ...obj }
+}
+
+export function toPairs<T>(obj: Record<string, T> | null | undefined) {
+  if (!obj) return [];
+  return Object.entries(obj) as [string, T][];
+}
+
+/**
+ * add prefix to error message, and throw it
+ */
+export function rethrowWithPrefix(e: any, prefix: string): never {
+  if (e instanceof Error) {
+    e.message = `${prefix}: ${e.message}`;
+    throw e;
+  }
+  throw new Error(`${prefix}: ${e?.message ?? e?.text ?? e}`, { cause: e });
+}

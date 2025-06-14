@@ -3,7 +3,7 @@ import { dirname } from "path";
 import { create as createResolver } from 'enhanced-resolve'
 import type { BundlerInBrowser } from "./BundlerInBrowser.js";
 import type { BuildConfiguration } from "./configuration.js";
-import { escapeRegExp, stripQuery } from "./utils.js";
+import { escapeRegExp, stripQuery } from "./utils/string.js";
 
 /* esbuild builtin loaders */
 const builtinLoaders = ['js', 'jsx', 'tsx', 'ts', 'css', 'json', 'text'] satisfies esbuild.Loader[]

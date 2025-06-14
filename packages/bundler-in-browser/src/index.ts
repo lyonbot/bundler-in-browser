@@ -5,7 +5,7 @@ export { BundlerInBrowser } from './BundlerInBrowser.js';
 export { MiniNPM } from './MiniNPM.js';
 export { EventEmitter } from './EventEmitter.js';
 
-export { wrapCommonJS, pathToNpmPackage } from './utils.js';
+export { wrapCommonJS, pathToNpmPackage } from './utils/string.js';
 export { makeParallelTaskMgr, ParallelTasksError } from './parallelTask.js';
 
 /** add sass support. requires `sass` installed */
