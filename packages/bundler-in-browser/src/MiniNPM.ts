@@ -1,6 +1,6 @@
 import path from "path";
 import TarStream from 'tar-stream';
-import { rethrowWithPrefix, memoAsync, toPairs, listToTestFn, separateNpmPackageNameVersion } from "./utils.js";
+import { rethrowWithPrefix, memoAsync, toPairs, listToTestFn, separateNpmPackageNameVersion } from "./utils/index.js";
 import { makeParallelTaskMgr } from "./parallelTask.js";
 import { maxSatisfying, satisfies } from "semver";
 import { EventEmitter } from "./EventEmitter.js";

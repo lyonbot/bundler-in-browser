@@ -6,7 +6,7 @@ import { getDefaultBuildConfiguration, type BuildConfiguration } from "./configu
 import { UserCodeEsbuildHelper } from "./esbuild-user.js";
 import { VendorCodeEsbuildHelper, type VendorBundleConfig } from "./esbuild-vendor.js";
 import { makeParallelTaskMgr } from "./parallelTask.js";
-import { cloneDeep, separateNpmPackageNameVersion, stripQuery, toSortedArray, wrapCommonJS } from './utils.js';
+import { cloneDeep, separateNpmPackageNameVersion, stripQuery, toSortedArray, wrapCommonJS } from './utils/index.js';
 
 export namespace BundlerInBrowser {
   export type BuildConfiguration = import('./configuration.js').BuildConfiguration;

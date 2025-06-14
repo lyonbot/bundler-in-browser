@@ -1,6 +1,6 @@
 import type esbuild from "esbuild-wasm";
 import { createESBuildNormalLoader, createESBuildResolver, EsbuildHelper, guessEntrypoint, type BaseBuildResult } from "./esbuild.js";
-import { pathToNpmPackage, stripQuery } from "./utils.js";
+import { pathToNpmPackage, stripQuery } from "./utils/string.js";
 
 /**
  * usage:
