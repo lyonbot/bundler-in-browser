@@ -22,18 +22,22 @@ async function main() {
     console.log("🌏 app @" + scopeId);
     foobarSay()
 
+    export { foobarSay }  // for hmr
+
     if (import.meta.hot) {
-      import.meta.hot.accept(() => {
+      import.meta.hot.accept((newModule) => {
         count++;
         console.log("🔥 hot " + count + " at " + scopeId);
         foobarSay();
+        debugger;
+        newModule.foobarSay();
       })
     }
   `)
 
   fs.mkdirSync('/node_modules/foobar', { recursive: true })
   fs.writeFileSync('/node_modules/foobar/index.js', `
-    export const foobarSay = () => console.log("🌏 foobar")
+    export const foobarSay = () => console.log("🌏 original foobar")
   `)
   fs.writeFileSync('/node_modules/foobar/package.json', JSON.stringify({
     name: 'foobar',
