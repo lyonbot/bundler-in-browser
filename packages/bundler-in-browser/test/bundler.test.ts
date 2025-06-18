@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { wrapCommonJS } from '../src/utils.js';
+import { wrapCommonJS } from '../src/utils/string.js';
 import { createBundlerForTest, hookMiniNpm, initializeEsbuild } from './testutil.js';
 
 describe('bundler', () => {

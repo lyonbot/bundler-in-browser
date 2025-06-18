@@ -11,7 +11,12 @@
     "skipLibCheck": true,
     "types": [
       "vite/client"
-    ]
+    ],
+    "rootDir": ".",
+    "paths": {
+      "bundler-in-browser": ["../src/index.ts"],
+      "@/*": ["../src/*"],
+    }
   },
   "include": ["./**/*.ts"],
   "references": [
