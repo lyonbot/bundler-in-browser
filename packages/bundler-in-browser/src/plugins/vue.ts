@@ -5,6 +5,7 @@ import type { BundlerInBrowser } from "../BundlerInBrowser.js";
 import type esbuild from "esbuild-wasm";
 import path from "path";
 import { memoAsync, stripQuery } from '../utils/index.js';
+import { countChar, toBase64 } from '../utils/string.js';
 
 const COMP_IDENTIFIER = '__vue_component__';
 function getFullPath(args: esbuild.OnResolveArgs) {
@@ -277,12 +278,19 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         if (errors.length > 0) return { errors };
 
         let codePrefix = '';
+        let codeSuffix = '\nexport default ' + COMP_IDENTIFIER;
         if (hasJSX) {
           codePrefix += '/** @jsx vueH */\n/** @jsxFrag vueFragment */\nimport { h as vueH, Fragment as vueFragment } from "vue";\n';
         }
 
+        const map = { ...compiledScript.map }
+        if (map.mappings) {
+          map.mappings = ';'.repeat(countChar(codePrefix, '\n')) + map.mappings
+          codeSuffix += '\n\n//# sourceMappingURL=data:application/json;base64,' + toBase64(JSON.stringify(map))
+        }
+
         return await bundler.pluginUtils.applyPostProcessors(args, {
-          contents: codePrefix + compiledScript.content + '\n\nexport default ' + COMP_IDENTIFIER,
+          contents: codePrefix + compiledScript.content + codeSuffix,
           loader: esbuildLoader,
           watchFiles: [filename],
           pluginData: { ...args.pluginData }

@@ -8,3 +8,4 @@ dist/
 *.tgz
 tsconfig.tsbuildinfo
 # package-lock.json
+coverage/
