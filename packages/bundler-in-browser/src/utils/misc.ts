@@ -28,6 +28,15 @@ export function toArray<T>(obj: Iterable<T> | T): NonNullable<T>[] {
   return [obj as NonNullable<T>];
 }
 
+export function groupBy<T>(arr: Iterable<T>, keyFn: (x: T) => string) {
+  const obj = {} as Record<string, T[]>;
+  for (const item of arr) {
+    const key = keyFn(item);
+    (obj[key] ||= []).push(item);
+  }
+  return obj;
+}
+
 export function cloneDeep<T>(obj: T): T {
   if (typeof obj !== 'object' || obj === null) return obj;
   if (Array.isArray(obj)) return obj.map(cloneDeep) as any;
