@@ -8,9 +8,12 @@ export function escapeRegExp(text: string) {
  * return `['@lyonbot/bundler-in-browser', 'foo/bar.js']`
  */
 export function pathToNpmPackage(fullPath: string): [packageName: string, importedPath: string] {
-  let fullPathSplitted = fullPath.split('/', 2);
-  let packageName = fullPath[0] === '@' ? fullPathSplitted.join('/') : fullPathSplitted[0];
-  let importedPath = fullPath.slice(packageName.length + 1) // remove leading slash
+  let fullPathSplitted = fullPath.indexOf('/');
+  if (fullPath[0] === '@' && fullPathSplitted !== -1) fullPathSplitted = fullPath.indexOf('/', fullPathSplitted + 1);  // handle `@foo/bar/baz`
+  if (fullPathSplitted === -1) return [fullPath, ''];
+
+  const packageName = fullPath.slice(0, fullPathSplitted);
+  const importedPath = fullPath.slice(fullPathSplitted + 1);
 
   return [packageName, importedPath];
 }
@@ -18,7 +21,7 @@ export function pathToNpmPackage(fullPath: string): [packageName: string, import
 /**
  * given a name with version, like `foo@^1.2.3`, 
  * 
- * return `['foo', '^1.2.3']`
+ * return `['foo', '^1.2.3']` or like [`@foo/bar', '^1.2.3']`
  */
 export function separateNpmPackageNameVersion(nameWithVersion: string, defaultVersion = 'latest'): [packageName: string, version: string] {
   const atIndex = nameWithVersion.indexOf('@', 1);
@@ -87,4 +90,31 @@ export function listToTestFn(list: (string | RegExp)[]): (str: string) => boolea
     for (const r of regex) if (r.test(str)) return true;
     return false;
   }
+}
+
+/**
+ * encode string to base64.
+ */
+export function toBase64(str: string) {
+  try {
+    return btoa(str);
+  } catch {
+    // maybe contains non-latin characters.
+    const utf8Bytes = new TextEncoder().encode(str);
+    const binaryString = String.fromCharCode(...utf8Bytes);
+    return btoa(binaryString);
+  }
+}
+
+/**
+ * equals to `str.split(sep).length - 1`
+ */
+export function countChar(str: string, sep: string) {
+  let count = 0;
+  let i = 0;
+  while ((i = str.indexOf(sep, i)) !== -1) {
+    count++;
+    i += sep.length;
+  }
+  return count;
 }

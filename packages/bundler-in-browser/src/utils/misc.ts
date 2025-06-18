@@ -8,6 +8,18 @@ export function isNotNil<T>(obj: T | null | undefined): obj is NonNullable<T> {
   return obj !== null && obj !== undefined;
 }
 
+export type Falsy = false | 0 | '' | null | undefined;
+
+export function isNotEmpty<T extends object>(obj: T | null | undefined): obj is NonNullable<T> {
+  if (!obj) return false;
+  if (Array.isArray(obj)) return obj.length > 0;
+  return Object.keys(obj).length > 0;
+}
+
+export function isEmpty<T extends object>(obj: T | null | undefined): obj is T & Falsy {
+  return !isNotEmpty(obj);
+}
+
 export function toArray<T>(obj: Iterable<T>): NonNullable<T>[]
 export function toArray<T>(obj: T): NonNullable<T>[]
 export function toArray<T>(obj: Iterable<T> | T): NonNullable<T>[] {
