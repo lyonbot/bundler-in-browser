@@ -30,16 +30,17 @@ describe('npm', () => {
 
     // ----------------------------------------------
 
-    await npm.install({
-      react: 'latest',
+    await npm.regenerateLockFile({
+      dirty: '1',
+      react: 'latest'
     })
+    await npm.install()
 
     // check hoisted
     expect(fs.readdirSync('/node_modules').sort()).toEqual([
       '.store',
       'dirty',
       'react',
-      'react-dom',  // hoisted
     ])
 
     // ----------------------------------------------
@@ -49,29 +50,32 @@ describe('npm', () => {
     expect(await npm.isAlreadySatisfied({ 'dirty': '1' })).toBe(true);
     expect(await npm.isAlreadySatisfied({ 'dirty': '^2.0.0' })).toBe(false);
 
-    await npm.install({
+    await npm.regenerateLockFile({
       'react': 'latest',
       'dirty': '2.0.0',
     })
+    await npm.install()
 
     expect(await npm.isAlreadySatisfied({ 'dirty': '^2.0.0' })).toBe(true);
 
-    expect(hook.ver('dirty')).toEqual('2.0.0')
-    expect(hook.ver('react', 'dirty')).toEqual('1.2.0')
-    expect(hook.ver('react', 'react-dom', 'dirty')).toEqual('1.2.0')
+    expect(await hook.ver('dirty')).toEqual('2.0.0')
+    expect(await hook.ver('react', 'dirty')).toEqual('1.2.0')
+    expect(await hook.ver('react', 'react-dom', 'dirty')).toEqual('1.2.0')
 
     // ----------------------------------------------
     // delete react
 
-    await npm.install({
+    const x = await npm.regenerateLockFile({
       'dirty': '2.0.0',
     })
+    await npm.install()
 
-    expect(hook.ver('dirty')).toEqual('2.0.0')
-    expect(hook.ver('react')).toEqual(null)
+    expect(await hook.ver('dirty')).toEqual('2.0.0')
+    expect(await hook.ver('react')).toEqual(null)
     expect(fs.readdirSync('/node_modules/.store').sort()).toEqual([
       "dirty@2.0.0",
       "lock.json",
+      'node_modules',
     ])
   })
 })

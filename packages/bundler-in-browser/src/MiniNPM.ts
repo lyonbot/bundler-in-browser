@@ -139,6 +139,9 @@ export class MiniNPM {
     return alreadySatisfied;
   }
 
+  /** @internal - packages to delete for next `install()` */
+  #packageIdsToDelete = new Set<string>();
+
   /**
    * build npm tree, and update lock file content, but not install packages
    */
@@ -195,12 +198,15 @@ export class MiniNPM {
       hoisted,
     };
     await this.writeLockFile(lockFile);
+    tree.existingPackagesToRemove.forEach(id => this.#packageIdsToDelete.add(id));
 
     return {
       buildTreeResult: tree,
       lockFile: lockFile,
     }
   }
+
+  /* c8 ignore start */
 
   getRegistry = (() => {
     let result: BuildTreeNPMRegistry | undefined;
@@ -238,6 +244,25 @@ export class MiniNPM {
     }
   })();
 
+  pourTarball = async (pkg: MiniNPM.PackageJsonLike, destDir: string) => {
+    const tarballUrl = pkg.dist?.tarball;
+    if (tarballUrl && tarballUrl !== BLOCKED_TAR_PATH) {
+      await pourTarball({
+        fs: this.fs,
+        tarballUrl,
+        destDir,
+      })
+    }
+
+    // TODO: support custom tarball content here.
+
+    // write the patched package.json from the registry
+    const json = await this.getRegistry().getPackageJson(pkg.name, pkg.version);
+    this.fs.writeFileSync(path.join(destDir, 'package.json'), JSON.stringify(json, null, 2));
+  }
+
+  /* c8 ignore stop */
+
   /**
    * install missing npm packages.
    * 
@@ -267,6 +292,16 @@ export class MiniNPM {
 
       fs.rmSync(hiddenHoistedDir, { recursive: true, force: true });
       fs.mkdirSync(hiddenHoistedDir, { recursive: true });
+    }
+
+    // delete unused packages
+    {
+      const toDeletes = Array.from(this.#packageIdsToDelete);
+      this.#packageIdsToDelete.clear();
+      for (const id of toDeletes) {
+        if (id === ROOT || lockFile.packages[id]) continue; // in use, do not delete
+        fs.rmSync(path.join(storeDir, id), { recursive: true, force: true });
+      }
     }
 
     // cleanup `.store/*/node_modules`, pour tarballs
@@ -325,19 +360,7 @@ export class MiniNPM {
         try {
           event.packageId = pkg.id;
           this.events.emit('progress', { ...event });
-
-          const tarballUrl = pkg.dist.tarball;
-          if (tarballUrl !== BLOCKED_TAR_PATH) {
-            await pourTarball({
-              fs,
-              tarballUrl,
-              destDir: packageUnzipTo,
-            })
-          }
-
-          // write the patched package.json from the registry
-          const json = await this.getRegistry().getPackageJson(pkg.name, pkg.version);
-          fs.writeFileSync(path.join(packageUnzipTo, 'package.json'), JSON.stringify(json, null, 2));
+          await this.pourTarball(pkg, packageUnzipTo);
         } finally {
           event.packageId = pkg.id;
           event.current++;
@@ -376,6 +399,7 @@ export class MiniNPM {
   }
 }
 
+/* c8 ignore start */
 function tryRun<T>(fn: () => T, defaults: T) {
   try {
     return fn();
@@ -383,3 +407,4 @@ function tryRun<T>(fn: () => T, defaults: T) {
     return defaults;
   }
 }
+/* c8 ignore stop */
