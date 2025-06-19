@@ -1,5 +1,5 @@
 import { pathToNpmPackage } from "../utils/string.js";
-import { type LockFilePackageNode, ROOT } from "./tree.js";
+import { type NpmTreeNode, ROOT } from "./tree.js";
 
 class PeerDepChain {
   /** ["B", "A"] for root -> A -> B -> pkg, if peerDependencies are satisfied since A */
@@ -24,7 +24,7 @@ class PeerDepChain {
     return c;
   }
 
-  handleAncestor(ancestor: LockFilePackageNode) {
+  handleAncestor(ancestor: NpmTreeNode) {
     this.ancestors.push(ancestor.id);
     for (const pkg of this.unresolved) {
       const versionRange = ancestor.dependencies[pkg];
@@ -54,10 +54,10 @@ export interface ResolvePeerDepResult {
  * note: 
  * - will NOT check resolved peerDependencies' version.
  */
-export function resolvePeerDependencies(packages: LockFilePackageNode[], fromId: string): ResolvePeerDepResult[] {
+export function resolvePeerDependencies(packages: NpmTreeNode[], fromId: string): ResolvePeerDepResult[] {
   // from the backward relationship "pkg.dependent", build a forward relationship
   const chains: Array<PeerDepChain> = [];
-  const map = new Map<string, LockFilePackageNode>(packages.map(x => [x.id, x]));
+  const map = new Map<string, NpmTreeNode>(packages.map(x => [x.id, x]));
 
   const pkg = map.get(fromId)!;
   const peerDepNames = Object.keys(pkg.peerDependencies || {});

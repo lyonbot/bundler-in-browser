@@ -28,11 +28,20 @@ export function toArray<T>(obj: Iterable<T> | T): NonNullable<T>[] {
   return [obj as NonNullable<T>];
 }
 
-export function groupBy<T>(arr: Iterable<T>, keyFn: (x: T) => string) {
+export function groupBy<T>(arr: Iterable<T> | undefined | null, keyFn: (x: T) => string) {
   const obj = {} as Record<string, T[]>;
-  for (const item of arr) {
+  for (const item of arr || []) {
     const key = keyFn(item);
     (obj[key] ||= []).push(item);
+  }
+  return obj;
+}
+
+export function keyBy<T>(arr: Iterable<T> | undefined | null, keyFn: (x: T) => string) {
+  const obj = {} as Record<string, T>;
+  for (const item of arr || []) {
+    const key = keyFn(item);
+    obj[key] = item;
   }
   return obj;
 }

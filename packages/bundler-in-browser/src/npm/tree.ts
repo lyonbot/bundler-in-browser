@@ -20,7 +20,7 @@ export type PeerDepWarning
   = { reason: 'missing', depName: string, fromId: string }
   | { reason: 'wrongVersion', depName: string, fromId: string, providerIds: string[], expectedVersionRange: string, actualVersion: string }
 
-export interface LockFilePackageNode {
+export interface NpmTreeNode {
   id: string;
   name: string;
   version: string;
@@ -44,6 +44,9 @@ export interface LockFilePackageNode {
   }
 }
 
+/**
+ * the id of "root" package
+ */
 export const ROOT = 'root'
 
 /**
@@ -53,9 +56,10 @@ export const ROOT = 'root'
  * @param registry 
  */
 export async function buildTree(
-  existingPackages: Record<string, LockFilePackageNode>,
+  existingPackages: Record<string, NpmTreeNode>,
   registry: BuildTreeNPMRegistry,
   options: {
+    concurrency?: number;
     onProgress?(e: { packageId: string, current: number, total: number }): void;
   } = {}
 ) {
@@ -64,14 +68,14 @@ export async function buildTree(
   if (!originalRoot) throw new Error(`Cannot find root node`);
 
   // tree node controller
-  const nodesWithDependents = new Map<string, LockFilePackageNode>();
+  const nodesWithDependents = new Map<string, NpmTreeNode>();
   const preferVersions = {} as Record<string, string[]>; // previously-installed or now-with-dependents. prefer to use them. eg. { "foo": ["1.0.0", "2.0.0"] }
   const getPackageNodeCtrl = memoAsync(async (name: string, version: string) => {
     const json = name === ROOT
       ? originalRoot
       : (existingPackages[`${name}@${version}`] || await registry.getPackageJson(name, version));
 
-    const node: LockFilePackageNode = {
+    const node: NpmTreeNode = {
       id: name === ROOT ? ROOT : `${name}@${version}`,
       name,
       version,
@@ -131,7 +135,7 @@ export async function buildTree(
   let taskCount = 1, doneTaskCount = 0;
   const taskRunner = makeParallelTaskMgr();
   taskRunner.push(() => visit(ROOT, ''));
-  await taskRunner.run(5);
+  await taskRunner.run(options.concurrency || 5);
 
   async function visit(name: string, version: string) {
     options.onProgress?.({ packageId: name, current: doneTaskCount++, total: taskCount });
@@ -162,6 +166,9 @@ export async function buildTree(
       taskCount++;
     }))
   }
+
+  // all done
+  options.onProgress?.({ packageId: ROOT, current: doneTaskCount, total: taskCount });
 
   // ----------------------------------------------
   // now answer is `nodesWithDependents`
@@ -250,6 +257,32 @@ export async function buildTree(
 
     peerDepWarnings,
   }
+}
+
+export function isAlreadySatisfied(
+  packages: NpmTreeNode[],
+  rootDependencies: { [name: string]: string },
+) {
+  const unresolved = { ...rootDependencies }
+  if (Object.keys(unresolved).length === 0) return true;
+
+  for (const pkg of packages) {
+    if (pkg.id === ROOT) continue;
+    for (const dstName in unresolved) {
+      const k = `${ROOT}/${dstName}`;
+      if (!pkg.dependents?.[k]) continue;
+
+      // pkg is that!
+      const [name, versionRange] = versionRangeStandardize(dstName, unresolved[dstName]);
+      if (name !== pkg.name) return false;
+      if (!satisfies(pkg.version, versionRange)) return false;  // note: "latest" will always fail
+
+      delete unresolved[dstName];
+      if (Object.keys(unresolved).length === 0) return true;
+    }
+  }
+
+  return false;
 }
 
 /**

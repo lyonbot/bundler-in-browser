@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { buildTree, type BuildTreeNPMRegistry, type LockFilePackageNode } from '@/npm/tree.js';
+import { buildTree, type BuildTreeNPMRegistry, type NpmTreeNode } from '@/npm/tree.js';
 
 // Mock registry implementation
 class MockRegistry implements BuildTreeNPMRegistry {
@@ -90,7 +90,7 @@ class MockRegistry implements BuildTreeNPMRegistry {
 describe('npm/buildTree', () => {
   it('should build dependency tree from root package', async () => {
     const registry = new MockRegistry();
-    const rootPackage: LockFilePackageNode = {
+    const rootPackage: NpmTreeNode = {
       id: 'root',
       name: 'root',
       version: '1.0.0',
@@ -111,7 +111,7 @@ describe('npm/buildTree', () => {
 
   it('should handle multiple versions of the same package, and support npm: protocol', async () => {
     const registry = new MockRegistry();
-    const rootPackage: LockFilePackageNode = {
+    const rootPackage: NpmTreeNode = {
       id: 'root',
       name: 'root',
       version: '1.0.0',
@@ -155,7 +155,7 @@ describe('npm/buildTree', () => {
 
   it('should reuse existing packages when possible', async () => {
     const registry = new MockRegistry();
-    const rootPackage: LockFilePackageNode = {
+    const rootPackage: NpmTreeNode = {
       id: 'root',
       name: 'root',
       version: '1.0.0',
@@ -166,7 +166,7 @@ describe('npm/buildTree', () => {
       dist: { shasum: '', tarball: '', integrity: '' }
     };
 
-    const existingPackages: Record<string, LockFilePackageNode> = {
+    const existingPackages: Record<string, NpmTreeNode> = {
       'root': rootPackage,
       'foo@2.0.0': {
         id: 'foo@2.0.0',
@@ -205,7 +205,7 @@ describe('npm/buildTree', () => {
 
   it('should handle package upgrades and remove old versions', async () => {
     const registry = new MockRegistry();
-    const rootPackage: LockFilePackageNode = {
+    const rootPackage: NpmTreeNode = {
       id: 'root',
       name: 'root',
       version: '1.0.0',
@@ -216,7 +216,7 @@ describe('npm/buildTree', () => {
       dist: { shasum: '', tarball: '', integrity: '' }
     };
 
-    const existingPackages: Record<string, LockFilePackageNode> = {
+    const existingPackages: Record<string, NpmTreeNode> = {
       'root': rootPackage,
       'foo@1.0.0': {
         id: 'foo@1.0.0',
@@ -273,7 +273,7 @@ describe('npm/buildTree', () => {
 
   it('should handle package upgrades including shared dependencies', async () => {
     const registry = new MockRegistry();
-    const rootPackage: LockFilePackageNode = {
+    const rootPackage: NpmTreeNode = {
       id: 'root',
       name: 'root',
       version: '1.0.0',
@@ -286,7 +286,7 @@ describe('npm/buildTree', () => {
     };
 
     // Initial state: root depends on foo@^1.0.0 and bar@*, using foo@1.1.0 and bar@1.0.0
-    const existingPackages: Record<string, LockFilePackageNode> = {
+    const existingPackages: Record<string, NpmTreeNode> = {
       'root': rootPackage,
       'foo@1.1.0': {
         id: 'foo@1.1.0',
@@ -351,7 +351,7 @@ describe('npm/buildTree', () => {
 
   it('should throw error when no compatible version is found', async () => {
     const registry = new MockRegistry();
-    const rootPackage: LockFilePackageNode = {
+    const rootPackage: NpmTreeNode = {
       id: 'root',
       name: 'root',
       version: '1.0.0',
@@ -370,7 +370,7 @@ describe('npm/buildTree', () => {
   describe('peerDependencies', () => {
     it('link peer dependencies', async () => {
       const registry = new MockRegistry();
-      const rootPackage: LockFilePackageNode = {
+      const rootPackage: NpmTreeNode = {
         id: 'root',
         name: 'root',
         version: '1.0.0',
@@ -395,7 +395,7 @@ describe('npm/buildTree', () => {
 
     it('link peer dependencies, warn for bad version', async () => {
       const registry = new MockRegistry();
-      const rootPackage: LockFilePackageNode = {
+      const rootPackage: NpmTreeNode = {
         id: 'root',
         name: 'root',
         version: '1.0.0',
@@ -433,7 +433,7 @@ describe('npm/buildTree', () => {
         registry.packages['bar-input'].versions['1.0.0'].peerDependenciesMeta = { 'bar': { optional: true } };
       }
 
-      const rootPackage: LockFilePackageNode = {
+      const rootPackage: NpmTreeNode = {
         id: 'root',
         name: 'root',
         version: '1.0.0',
@@ -475,7 +475,7 @@ describe('npm/buildTree', () => {
           }
         },
       }
-      const rootPackage: LockFilePackageNode = {
+      const rootPackage: NpmTreeNode = {
         id: 'root',
         name: 'root',
         version: '1.0.0',

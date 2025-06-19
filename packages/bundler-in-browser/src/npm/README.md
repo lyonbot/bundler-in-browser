@@ -21,21 +21,30 @@ You can run only stage 1 by calling `buildTree()` method.
 
 ### Collect Versions
 
-First of all, it construct the structure of `node_modules` like this:
+To leverage symlink, we need to construct the structure of `node_modules` like this:
 
 ```
 node_modules
 + .store
   + foo@1.0.3
-    + bar -> bar@1.2.0    // from  { dependencies: { "bar": "@1" } }
-    + bar2 -> bar@2.7.0   // from  { dependencies: { "bar2": "npm:bar@^2.0.0" } }
+    + node_modules
+      + bar -> ../../bar@1.2.0/node_modules/bar    // from  { dependencies: { "bar": "@1" } }
+      + bar2 -> ../../bar@2.7.0/node_modules/bar   // from  { dependencies: { "bar2": "npm:bar@^2.0.0" } }
+      + foo
   + bar@1.2.0
+    + node_modules
+      + bar
   + bar@2.7.0
-+ foo -> foo@1.0.3
-+ bar -> bar@2.7.0
+    + node_modules
+      + bar
++ foo -> ./.store/foo@1.0.3/node_modules/foo
++ bar -> ./.store/bar@2.7.0/node_modules/bar
 ```
 
-The structure is described as a `LockFile` object, looks like:
+Before installing packages, we need to query registry, collect all versions of all packages,
+and build a tree (aka. `LockFile`) so we can easily build `node_modules` like above.
+
+The `buildTree()` method will build the tree like this:
 
 ```js
 {
@@ -61,11 +70,7 @@ The structure is described as a `LockFile` object, looks like:
         "bar": "^1.0.0",
         "bar2": "npm:bar@^2.0.0",
       },
-      dist: {
-        shasum: 'xxx',
-        tarball: 'xxx',
-        integrity: 'xxx',
-      }
+      dist: { shasum: 'xxx', tarball: 'xxx', integrity: 'xxx', }
     },
     "bar@2.7.0": {
       id: "bar@2.7.0",
@@ -76,11 +81,7 @@ The structure is described as a `LockFile` object, looks like:
         "foo@1.0.3/bar2": "^2.0.0" // from foo@1.0.3's  { dependencies: { "bar2": "npm:bar@^2.0.0" } }
       },
       dependencies: {},
-      dist: {
-        shasum: 'xxx',
-        tarball: 'xxx',
-        integrity: 'xxx',
-      }
+      dist: { shasum: 'xxx', tarball: 'xxx', integrity: 'xxx', }
     },
     ...
   }
@@ -99,10 +100,12 @@ A package inherit "peer" dependencies from its ancestor.
 The version of "peer" dependencies are determined by the nearest ancestor who installed the dependencies.
 
 ```
-root  --->  my-input@1.0.0  --> react@17.0.0
-      \                           |  (peerDep, version determined by nearest ancestor's dependencies)
-       `->  react@17.0.0 .........'
+root ─┬──>  my-input@1.0.0 ──> (peerDep) react@17.0.0
+      │                                    ┆  (version determined by nearest ancestor's dependencies)
+      └──>  react@17.0.0 ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┘
 ```
+
+After patching, the tree will looks like this:
 
 ```js
 {
@@ -143,48 +146,80 @@ root  --->  my-input@1.0.0  --> react@17.0.0
 }
 ```
 
+#### Expansion for Peer Dependencies
+
+> yet not implemented
+
+Peer Dependencies could make the dependency chains more complex. Dependent and ancestor dependents may get expanded.
+
 Lets say we have packages (H0) and (H1) for root.
 
 - H0 depends on A & `P@1.0.0`
 - H1 depends on A & `P@2.0.0`
 - A has peer dependency `P@*`
 
+```
+root ─┬──> H0 ┬──> A  ────> (peerDep)P
+      │       └──> P@1.0.0 ┄┄┄┄┄┄┄┄┄┄┘
+      └──> H1 ┬──> A  ────> (peerDep)P
+              └──> P@2.0.0 ┄┄┄┄┄┄┄┄┄┄┘
+```
+
 The (A) from (H0), will receive `P@1.0.0`, and the (A) from (H1), will receive `P@2.0.0`. Even though they are both (A), but their behaviors are different, depends on which (P) can be seen.
 
-To make the mechanism work with symlink, we have to duplicate package (A) into (A+P0) and (A+P1) for A's dependents (H0, H1) -- actually, there are two (A)s because their actual dependencies are different.
+To make the mechanism work with symlink, we have to duplicate package (A) into (A+P1) and (A+P2) for A's dependents (H0, H1) -- actually, there are two (A)s because their actual dependencies are different.
 
 ```
-root  --->  H0  --> A0  --> P(=P0)         // A0 = A + P0
-      \         `-> P0
-       `->  H1  --> A1  --> P(=P1)         // A1 = A + P1
-                `-> P1
+root ─┬──> H0 ┬──> A0  ────> (peerDep)P@1.0.0             A0 = A + P@1.0.0
+      │       └──> P@1.0.0 ┄┄┄┄┄┄┄┄┄┄┄┘
+      └──> H1 ┬──> A1  ────> (peerDep)P@2.0.0             A1 = A + P@2.0.0
+              └──> P@2.0.0 ┄┄┄┄┄┄┄┄┄┄┄┘
 ```
 
-In this case, the `A@1.0.0` in `"packages"` of lock file, will become two:
+In this case, the `A@1.0.0` in `"packages"` of lock file, will be expanded two:
 
 - `A@1.0.0~P@1.0.0` for H0
 - `A@1.0.0~P@2.0.0` for H1
 
+The expansion may spread through the dependency chains.
 
-
-In more complex situation, an ancestor may be polluted and get duplicated versions?
+Let's see a complex situation:
 
 ```
-root  --->  B  --> A --> [peerDep]P
-      +-->  P0
-      +-->  A  --> [peerDep]P
-       `->  C  --> A  --> [peerDep]P
-                +-> B --> A --> [peerDep]P
-                `-> P1
+root ─┬──> B  ────> A  ────> (peerDep)P
+      ├──> P@1.0.0
+      ├──> A  ────> (peerDep)P
+      └──> C  ─┬──> A  ────> (peerDep)P
+               ├──> B  ────> A  ────> (peerDep)P
+               └──> P@2.0.0
+```
 
+after linking the `P`s:
 
-root  --->  B0 --> A0  --> P(=P0)         // A0 = A + P0, P0 inherited from root
-      +-->  P0
-      +-->  A0 --> P(=P0)
-       `->  C   --> A1  --> P(=P1)         // A1 = A + P1
-                +-> B1  --> A1 --> P(=P1)
-                `-> P1
+```
+root ─┬──> B  ────> A  ────> (peerDep)P
+      ├──> P@1.0.0 <┄┄┄┄┄┄┄┄┄┬┄┄┄┄┄┄┄┄┤
+      ├──> A  ────> (peerDep)P        ┆
+      └──> C  ─┬──> A  ────> (peerDep)P
+               ├──> B  ────> A  ────> (peerDep)P
+               └──> P@2.0.0 <┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┘
+```
 
-B -> B0 & B1
-A -> A0 & A1
+There are two version of `P`, making `A` expanded to `A0, A1`, which also affects their dependents like `B, C`.
+Especially in this case, `B` will be expanded to two version `B0, B1`.
+
+```
+actual result:
+
+A0 = A + P@1.0.0
+A1 = A + P@2.0.0
+B0 = B using A0 = B + A + P@1.0.0
+B1 = B using A1 = B + A + P@2.0.0
+
+root ─┬──> B0  ────> A0 ────> P@1.0.0
+      ├──> P@1.0.0 <┬┄┄┄┄┄┄┄┄┄┤
+      ├──> A0 ────> P@1.0.0   ┆
+      └──> C  ─┬──> A0  ────> P@1.0.0
+               ├──> B1 ────> A1 ────> P@2.0.0
+               └──> P@2.0.0 <┄┄┄┄┄┄┄┄┄┘
 ```
