@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { resolvePeerDependencies } from '@/npm/peerDependencies.js';
-import { type LockFilePackageNode, ROOT } from '@/npm/tree.js';
+import { type NpmTreeNode, ROOT } from '@/npm/tree.js';
 
 describe('npm/peerDependencies', () => {
   function createMockPackage(
@@ -12,7 +12,7 @@ describe('npm/peerDependencies', () => {
       peerDependencies?: Record<string, string>;
       dependents?: Record<string, string>;
     } = {}
-  ): LockFilePackageNode {
+  ): NpmTreeNode {
     return {
       id,
       name,
@@ -35,7 +35,7 @@ describe('npm/peerDependencies', () => {
     //       ├─ react
     //       └─ ui-lib  (peerDeps: react)
 
-    const packages: LockFilePackageNode[] = [
+    const packages: NpmTreeNode[] = [
       createMockPackage(ROOT, 'root', '1.0.0', {
         dependencies: {
           'react': '^18.0.0',
@@ -96,7 +96,7 @@ describe('npm/peerDependencies', () => {
     //       ├─ vue
     //       └─ shared-lib (peerDeps: vue, react)
 
-    const packages: LockFilePackageNode[] = [
+    const packages: NpmTreeNode[] = [
       createMockPackage(ROOT, 'root', '1.0.0', {
         dependencies: {
           'react': '^18.0.0',
@@ -207,7 +207,7 @@ describe('npm/peerDependencies', () => {
     //   └─ app-component
     //       └─ ui-lib  (peerDeps: react)
 
-    const packages: LockFilePackageNode[] = [
+    const packages: NpmTreeNode[] = [
       createMockPackage(ROOT, 'root', '1.0.0', {
         dependencies: {
           'app-component': '^1.0.0'
@@ -254,7 +254,7 @@ describe('npm/peerDependencies', () => {
     //   └─ app-component
     //       └─ multi-framework-lib (peerDeps: react, vue)
 
-    const packages: LockFilePackageNode[] = [
+    const packages: NpmTreeNode[] = [
       createMockPackage(ROOT, 'root', '1.0.0', {
         dependencies: {
           'react': '^18.0.0',
@@ -321,7 +321,7 @@ describe('npm/peerDependencies', () => {
     //       └─ level-2
     //           └─ level-3 (peerDeps: react)
     
-    const packages: LockFilePackageNode[] = [
+    const packages: NpmTreeNode[] = [
       createMockPackage(ROOT, 'root', '1.0.0', {
         dependencies: {
           'react': '^18.0.0',
@@ -379,7 +379,7 @@ describe('npm/peerDependencies', () => {
   });
 
   it('should handle packages with no peer dependencies', () => {
-    const packages: LockFilePackageNode[] = [
+    const packages: NpmTreeNode[] = [
       createMockPackage(ROOT, 'root', '1.0.0', {
         dependencies: {
           'simple-lib': '^1.0.0'

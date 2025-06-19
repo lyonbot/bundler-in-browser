@@ -1,6 +1,9 @@
 import type { BundlerInBrowser } from './BundlerInBrowser.js';
 import type { InstallVuePluginOptions, VuePluginInstance } from './plugins/vue.js';
 
+import * as npm from './npm/index.js';
+export { npm };
+
 export { BundlerInBrowser } from './BundlerInBrowser.js';
 export { MiniNPM } from './MiniNPM.js';
 export { EventEmitter } from './EventEmitter.js';
