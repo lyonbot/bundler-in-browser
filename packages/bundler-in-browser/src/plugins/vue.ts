@@ -21,7 +21,7 @@ function getUrlParams(search: string): Record<string, string> {
   }, {})
 }
 
-function getLineContent(code: string, offset: number) {
+function offsetToPosition(code: string, offset: number) {
   let lineStart = 0;
   let line = 1;
   let lineEnd = code.length;
@@ -311,7 +311,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
 
         const toESBuildErrorCtx: Parameters<typeof toESBuildError>[1] = {
           currentFile: descriptor.filename,
-          offsetToPosition: (offset: number) => getLineContent(code, offset),
+          offsetToPosition: (offset: number) => offsetToPosition(code, offset),
         }
         if (errors.length > 0) return {
           contents: code,

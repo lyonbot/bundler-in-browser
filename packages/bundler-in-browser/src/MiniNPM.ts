@@ -353,6 +353,7 @@ export class MiniNPM {
             else fs.unlinkSync(linkPath);
           }
 
+          this.events.emit('progress', { ...event });   // reused, but still update progress
           return;
         }
         fs.mkdirSync(packageUnzipTo, { recursive: true });
