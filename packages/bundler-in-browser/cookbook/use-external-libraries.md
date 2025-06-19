@@ -94,6 +94,10 @@ bundler.npm.options.blocklist.push(
 );
 ```
 
+### shamefully-hoist
+
+You can shamefully hoist packages with `bundler.npm.options.shamefullyHoist`. It will mess up your `node_modules` folder.
+
 ### custom npm registry
 
 You can specify a custom npm registry url with `bundler.npm.options.registryUrl`.

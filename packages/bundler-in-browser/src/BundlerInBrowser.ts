@@ -132,7 +132,7 @@ export class BundlerInBrowser {
   constructor(fs: BundlerInBrowser.IFs) {
     this.fs = fs;
 
-    this.npm = new MiniNPM(fs, { useJSDelivrToQueryVersions: false });
+    this.npm = new MiniNPM(fs);
     this.npm.events.on('progress', event => {
       this.events.emit('npm:progress', event);
     });
@@ -182,7 +182,7 @@ export class BundlerInBrowser {
 
         if (rootPackageJson.dependencies[name] && !version) return;
         if (!version) {
-          const latest = await this.npm.getPackageVersions(name).then(v => v?.tags?.latest)
+          const latest = await this.npm.getRegistry().getVersionList(name).then(v => v?.tags?.latest)
           if (!latest) throw new Error(`Cannot fetch version of ${name}`);
           version = `^${latest}`;
         }
@@ -298,7 +298,8 @@ export class BundlerInBrowser {
       // install npm packages
       if (!await this.npm.isAlreadySatisfied(rootPackageJson.dependencies)) {
         try {
-          await this.npm.install(rootPackageJson.dependencies);
+          await this.npm.regenerateLockFile(rootPackageJson.dependencies);
+          await this.npm.install();
           this.events.emit('npm:install:done');
         } catch (err: any) {
           this.events.emit('npm:install:error', { errors: err.errors || [err] });

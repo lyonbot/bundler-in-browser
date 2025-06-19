@@ -15,14 +15,13 @@ const decompressGzipFromResponse: (res: Response) => Promise<Uint8Array>
     };
 
 export async function pourTarball(
-  { fs, tarballUrl, destDir, patchPackageJson }: {
+  { fs, tarballUrl, destDir }: {
     fs: {
       mkdirSync(dir: string, options?: { recursive?: boolean; }): void;
       writeFileSync(file: string, data: Uint8Array | string): void;
     };
     tarballUrl: string;
     destDir: string;
-    patchPackageJson?: (json: any) => any;
   }
 ) {
   if (!destDir.endsWith('/')) destDir += '/';
@@ -55,17 +54,11 @@ export async function pourTarball(
       return;
     }
 
-    // make dir recrusive
+    // make dir recursively
     const dirName = path.dirname(fileName);
     if (dirName) fs.mkdirSync(dirName, { recursive: true });
 
     let data = inflated.slice(dataOffset, dataOffset + header.size!);
-    if (fileName === 'package.json' && typeof patchPackageJson === 'function') {
-      const str = new TextDecoder().decode(data);
-      let json = JSON.parse(str)
-      json = patchPackageJson(json);
-      fs.writeFileSync(fileName, JSON.stringify(json, null, 2));
-    }
     fs.writeFileSync(fileName, data);
     // if (header.name === 'package/package.json') packageJson = JSON.parse(decodeUTF8(data));
 
