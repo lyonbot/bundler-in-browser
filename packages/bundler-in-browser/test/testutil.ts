@@ -5,6 +5,8 @@ import type { MiniNPM } from '../src/MiniNPM.js';
 import { InMemory, fs } from '@zenfs/core';
 import { BundlerInBrowser } from 'bundler-in-browser';
 import esbuild from "esbuild-wasm";
+import type { BuildTreeNPMRegistry } from '@/npm/tree.js';
+import { create as createResolver } from 'enhanced-resolve'
 
 export function hookMiniNpm(npm: MiniNPM) {
   const $$latestVersion = Symbol('latestVersion')
@@ -19,20 +21,13 @@ export function hookMiniNpm(npm: MiniNPM) {
     }
   } = {}
 
-  npm.pourTarball = async (tarballUrl, destDir) => {
+  npm.pourTarball = async (pkg, destDir) => {
     // guess version from url
-    let versionMarkPos = tarballUrl.lastIndexOf('/-/')
-    let version = tarballUrl.slice(versionMarkPos + 3)
-    let name = tarballUrl.slice(tarballUrl.indexOf('/package/') + 9, versionMarkPos)
+    const { name, version } = pkg
 
     npm.fs.mkdirSync(destDir, { recursive: true })
-    npm.fs.writeFileSync(`${destDir}/version`, version)
-    npm.fs.writeFileSync(`${destDir}/package.json`, JSON.stringify({
-      name,
-      version,
-      main: mockRegistry[name][version].main || 'index.js',
-      dependencies: { ...mockRegistry[name][version].dependencies },
-    }))
+    npm.fs.writeFileSync(`${destDir}/version`, version)  // for debug test only
+    npm.fs.writeFileSync(`${destDir}/package.json`, JSON.stringify(await mockRegistryCtrl.getPackageJson(name, version), null, 2))
 
     const files = mockRegistry[name][version].files
     if (files) {
@@ -43,32 +38,29 @@ export function hookMiniNpm(npm: MiniNPM) {
       }
     }
   }
-  npm.getPackageVersions = async (name) => {
-    if (!mockRegistry[name]) return { versions: [], tags: {} }
+  npm.getRegistry = () => mockRegistryCtrl
 
-    const versions = Object.keys(mockRegistry[name]).filter(x => typeof x === 'string')
-    const tags = {
-      latest: mockRegistry[name][$$latestVersion],
-    }
-
-    return { versions, tags }
-  }
-  npm.getPackageJson = memoAsync(async (name, version) => {
-    let p = mockRegistry[name]?.[version]
-    if (!p) throw new Error(`package ${name}@${version} not found`)
-
-    return {
-      name,
-      version,
-      dependencies: {},
-      ...p,
-      dist: {
-        shasum: '123',
-        tarball: `http://localhost/package/${name}/-/${version}`,
-        integrity: '123',
+  const mockRegistryCtrl: BuildTreeNPMRegistry = {
+    getPackageJson: async (name, version) => {
+      const mod = mockRegistry[name]
+      if (!mod) throw new Error(`package ${name} not found`)
+      if (!mod[version]) throw new Error(`package ${name}@${version} not found`)
+      return {
+        name,
+        version,
+        main: mod[version].main || 'index.js',
+        dependencies: { ...mod[version].dependencies },
       }
-    }
-  })
+    },
+    getVersionList: async (name) => {
+      const mod = mockRegistry[name]
+      if (!mod) throw new Error(`package ${name} not found`)
+      return {
+        versions: Object.keys(mod).filter(x => typeof x === 'string'),
+        tags: { latest: mod[$$latestVersion] },
+      }
+    },
+  }
 
   const addMockPackage = (name: string, version: string, data: typeof mockRegistry[string][string]) => {
     mockRegistry[name] = mockRegistry[name] || {}
@@ -82,10 +74,29 @@ export function hookMiniNpm(npm: MiniNPM) {
   return {
     addMockPackage,
     /** query the (nested) version of installed package */
-    ver(...pkgNames: string[]) {
+    async ver(...pkgNames: string[]) {
+      const invokeResolver = createResolver({
+        fileSystem: npm.fs as any,
+        exportsFields: [], // ignore "exports" field, so we can read package.json
+        symlinks: true,
+      })
+
       try {
-        const path = pkgNames.map(x => '/node_modules/' + x).join('')
-        return npm.fs.readFileSync(path + '/version', 'utf8') as string
+        let currDir = '/'
+        for (const pkg of pkgNames) {
+          await new Promise<void>((resolve, reject) => {
+            invokeResolver(currDir, `${pkg}/package.json`, (err, res) => {
+              if (err) return reject(err);
+              if (!res) return reject(new Error(`Cannot resolve ${pkg}`));
+
+              currDir = path.dirname(res)
+              resolve()
+            })
+          })
+        }
+
+        const versionFile = npm.fs.readFileSync(currDir + '/version', 'utf8') as string
+        return versionFile
       } catch {
         return null
       }
