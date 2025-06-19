@@ -12,7 +12,11 @@ export interface BuildTreeNPMRegistry {
     tags: Record<string, string>;
   }>
 
-  /** query a package.json. if not exist, throw an error */
+  /** 
+   * query a package.json. if not exist, throw an error
+   * 
+   * NOTE: the package.json need to contain "dist.tarball" field
+   */
   getPackageJson(packageName: string, version: string): Promise<any>;
 }
 

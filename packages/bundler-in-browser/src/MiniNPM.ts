@@ -1,18 +1,36 @@
 import path from "path";
-import TarStream from 'tar-stream';
-import { rethrowWithPrefix, memoAsync, toPairs, listToTestFn, separateNpmPackageNameVersion } from "./utils/index.js";
-import { makeParallelTaskMgr } from "./parallelTask.js";
-import { maxSatisfying, satisfies } from "semver";
-import { EventEmitter } from "./EventEmitter.js";
 import type { BundlerInBrowser } from "./BundlerInBrowser.js";
+import { EventEmitter } from "./EventEmitter.js";
+import { NPMRegistry } from "./npm/registry.js";
+import { pourTarball } from "./npm/tarball.js";
+import { buildTree, isAlreadySatisfied, ROOT, type BuildTreeNPMRegistry, type NpmTreeNode } from "./npm/tree.js";
+import { makeParallelTaskMgr } from "./parallelTask.js";
+import { listToTestFn, memoAsync, pathToNpmPackage } from "./utils/index.js";
+import { groupBy, keyBy } from "./utils/misc.js";
+
+const LOCK_FILENAME = 'lock.json';
+
+const BLOCKED_TAR_PATH = 'blocked:'
 
 export namespace MiniNPM {
   export interface Options {
+    /** 
+     * npm registry url. 
+     * 
+     * @default "https://registry.npmjs.org" 
+     * @example "https://mirrors.cloud.tencent.com/npm"
+     */
     registryUrl?: string;
+
+    /** directory of root node_modules. defaults to `/node_modules` */
     nodeModulesDir?: string;
-    useJSDelivrToQueryVersions?: boolean;
+    shamefullyHoist?: boolean;
     concurrency?: number;
-    blocklist?: (string | RegExp)[]; // packages won't be installed
+
+    /** these packages won't be installed */
+    blocklist?: (string | RegExp)[];
+
+    /** patch package.json before installing. also affect resolving */
     packageJsonPatches?: Array<(json: PackageJsonLike) => PackageJsonLike | void>;
   }
 
@@ -20,7 +38,9 @@ export namespace MiniNPM {
     name: string;
     version: string;
     dependencies?: Record<string, string>;
-    [symPatched]?: true;
+    peerDependencies?: Record<string, string>;
+    peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+    dist?: { tarball: string };
     [key: string]: any;
   }
 
@@ -29,39 +49,30 @@ export namespace MiniNPM {
     dependencies: Record<string, string>; // including peerDependencies, only for version checking
   }
 
-  export interface GatheredPackageDep {
-    id: string; // name@version
-    name: string;
-    version: string;
-    dependents: Record<string, string>; // { "name@version": "versionRange" }
-    dependencies: Record<string, string>; // { "name": "versionRange" }
-    peerDependencies?: Record<string, string>; // { "name": "versionRange" } 
-
-    dist: {
-      shasum: string;
-      tarball: string;
-      integrity: string;
-    }
-  }
+  export type TreeNode = NpmTreeNode
 
   export interface LockFile {
     packages: {
-      [nameAtVersion: string]: MiniNPM.GatheredPackageDep;
+      [nameAtVersion: string]: TreeNode;
     }
-    hoisted: string[];
+
+    /**
+     * a hidden hoisted packages, in ./store/node_modules/
+     * designed for not-behaved packages, like requiring "@babel/runtime" without peerDependencies
+     * 
+     * eg { "@babel/runtime": "@babel/runtime@7.18.9" }
+     */
+    hoisted: { [dstName: string]: string };
   }
 
   export interface ProgressEvent {
     type: 'progress';
     stage: 'fetch-metadata' | 'install-package';
     packageId: string;
-    dependentId?: string;
     current: number;
     total: number;
   }
 }
-
-const symPatched = 'bnb:patched';
 
 /**
  * a minimal npm client, which only supports installing packages.
@@ -73,17 +84,13 @@ const symPatched = 'bnb:patched';
 export class MiniNPM {
   public fs: BundlerInBrowser.IFs;
   public options: Required<MiniNPM.Options>;
-  public index: Record<string, MiniNPM.PkgIndex[]> = {};
 
   public events = new EventEmitter<{
     'progress': (e: MiniNPM.ProgressEvent) => void;
     'metadata-fetched': (e: {
-      requiredPackages: Record<string, MiniNPM.GatheredPackageDep>;
-      reusedInstalledIds: Set<string>;
+      requiredPackages: Record<string, MiniNPM.TreeNode>;
     }) => void
   }>()
-
-  ROOT = 'ROOT';
 
   constructor(fs: BundlerInBrowser.IFs, options: MiniNPM.Options = {}) {
     this.fs = fs;
@@ -91,7 +98,7 @@ export class MiniNPM {
       registryUrl: 'https://registry.npmjs.org',
       // registryUrl: 'https://mirrors.cloud.tencent.com/npm',
       nodeModulesDir: '/node_modules',
-      useJSDelivrToQueryVersions: false,
+      shamefullyHoist: false,
       concurrency: 5,
       blocklist: [],
       packageJsonPatches: [],
@@ -99,175 +106,8 @@ export class MiniNPM {
     };
   }
 
-  /**
-   * find all dependencies to be installed, in a flat format
-   * 
-   * in the returned object, there is a `[this.ROOT]` key, which is the root package
-   */
-  async gatherPackagesToInstall(
-    rootDependencies: { [name: string]: string },
-    prevResult?: MiniNPM.LockFile['packages']
-  ) {
-    const ROOT = this.ROOT;
-    const requiredPackages: MiniNPM.LockFile['packages'] = {
-      [ROOT]: {
-        id: ROOT,
-        name: ROOT,
-        version: '0.0.0',
-        dependents: {},
-        dependencies: { ...rootDependencies },
-        dist: {} as any,
-      },
-    }
-
-    const installedLUT: { [name: string]: { [version: string]: MiniNPM.GatheredPackageDep } } = {};
-    prevResult && Object.values(prevResult).forEach(dep => {
-      if (dep.id === ROOT) return;
-      (installedLUT[dep.name] ||= {})[dep.version] = dep;
-    })
-
-    const parallelTasks = makeParallelTaskMgr()
-    let total = 0, current = 0;
-
-    const cachedSemverResult = {} as Record<string, string | null>; // { "foobar@^1.2.3": "1.3.0" }
-
-    const isBlockedPackage = listToTestFn(this.options.blocklist);
-
-    const handleDep = async (name: string, versionRange: string, dependentId: string) => {
-      if (isBlockedPackage(name)) return;
-
-      const event: MiniNPM.ProgressEvent = {
-        type: 'progress',
-        stage: 'fetch-metadata',
-        packageId: `${name}@${versionRange}`,
-        dependentId,
-        current: current,
-        total: ++total,
-      }
-      this.events.emit('progress', event);
-
-      const version = cachedSemverResult[`${name}@${versionRange}`] ||= await (async () => {
-        const installedVersions = installedLUT[name]
-        const exist = (installedVersions && maxSatisfying(Object.keys(installedVersions), versionRange))
-        if (exist) return exist;
-
-        const allVersions = await this.getPackageVersions(name);
-        const ret = allVersions.tags[versionRange] || maxSatisfying(allVersions.versions, versionRange)
-        if (!ret) return null; // not found
-
-        // double check: if prev installed "foo@2.6.0" (required via "foo@^2.0.0"),
-        // but now we met "foo@^2.7.0", then check whether "foo@2.6.0" shall be removed by validating its dependents shall move to "foo@2.7.0"
-        // ( by validating all dependents )
-        // note: `ret >= exist`
-        if (installedVersions) {
-          Object.values(installedVersions).forEach(dep => {
-            if (!requiredPackages[dep.id]) return; // this pre-installed package is not required in current session
-
-            // this package reused, check whether it can be taken away
-
-            let killed = 0;
-            const dependents = toPairs(dep.dependents);
-            dependents.forEach(([dependentId, versionRange]) => {
-              if (!satisfies(ret, versionRange)) return;
-
-              // heck! need move to `ret`
-              delete dep.dependents[dependentId];
-              killed++;
-            })
-
-            if (killed === dependents.length) {
-              // none needs it anymore, remove it
-              getDep.remove(name, dep.version);
-              delete requiredPackages[dep.id]; // side effect of `getDep` 
-            }
-          })
-        }
-
-        return ret;
-      })();
-
-      if (!version) throw new Error(`No compatible version found for ${name}@${versionRange}`);
-
-      const dep = await getDep(name, version);
-      dep.dependents[dependentId] = versionRange;
-
-      this.events.emit('progress', {
-        ...event,
-        current: ++current,
-        total,
-      })
-    }
-
-    const getDep = memoAsync(async (name: string, version: string) => {
-      let dep: MiniNPM.GatheredPackageDep;
-
-      const prev = prevResult?.[`${name}@${version}`];
-      if (prev) {
-        dep = {
-          ...prev,
-          dependents: {}, // will br rebuilt
-        }
-      } else {
-        const packageJson = await this.getPackageJson(name, version);
-        dep = {
-          id: `${name}@${version}`,
-          name,
-          version,
-          dependents: {},
-          dependencies: packageJson.dependencies || {},
-          peerDependencies: packageJson.peerDependencies,
-          dist: packageJson.dist,
-        }
-      }
-
-      requiredPackages[dep.id] = dep;
-      toPairs(dep.dependencies).forEach(([name, versionRange]) => {
-        parallelTasks.push(() => handleDep(name, versionRange as string, dep.id));
-      })
-      return dep;
-    })
-
-    toPairs(rootDependencies).forEach(([name, versionRange]) => {
-      parallelTasks.push(() => handleDep(name, versionRange, ROOT));
-    })
-
-    // now run all parallel tasks -- it will generate during work
-    await parallelTasks.run(this.options.concurrency);
-
-    return {
-      requiredPackages,
-      reusedInstalledIds: new Set(prevResult ? Object.keys(prevResult).filter(id => requiredPackages[id]) : []),
-    };
-  }
-
-  async getHoistedPackages(depFullList: Record<string, MiniNPM.GatheredPackageDep>) {
-    const ps: { [name: string]: { [id: string]: number } } = {}
-    Object.values(depFullList).forEach(dep => {
-      if (dep.id === this.ROOT) return;
-
-      const p = ps[dep.name] || (ps[dep.name] = {})
-      if (this.ROOT in dep.dependents) p[dep.id] = Infinity;
-      else p[dep.id] = (p[dep.id] || 0) + Object.keys(dep.dependents).length;
-    })
-
-    const hoisted = new Set<string>();
-    Object.values(ps).forEach((p) => {
-      // find id with highest score
-      let ans = '', maxScore = 0;
-      for (let [id, score] of Object.entries(p)) {
-        if (score > maxScore) {
-          ans = id;
-          maxScore = score;
-        }
-      }
-      hoisted.add(ans);
-    })
-
-    return { hoisted };
-  }
-
   getLockFilePath() {
-    return path.join(this.options.nodeModulesDir, '.store', 'lock.json');
+    return path.join(this.options.nodeModulesDir, '.store', LOCK_FILENAME);
   }
 
   async readLockFile() {
@@ -284,295 +124,262 @@ export class MiniNPM {
 
   async writeLockFile(lockFile: MiniNPM.LockFile) {
     const lockFilePath = this.getLockFilePath();
+    this.fs.mkdirSync(path.dirname(lockFilePath), { recursive: true });
     this.fs.writeFileSync(lockFilePath, JSON.stringify(lockFile, null, 2));
   }
 
+  /**
+   * check whether root's dep already satisfied. if so, you can skip install.
+   * 
+   * @param rootDependencies 
+   */
   async isAlreadySatisfied(rootDependencies: { [name: string]: string }) {
     const lockFile = await this.readLockFile();
-    if (!lockFile) return false;
-
-    const hoisted = {} as Record<string, string>; // { "foo" "1.2.3" }
-    lockFile.hoisted.forEach(id => {
-      const [name, version] = separateNpmPackageNameVersion(id);
-      hoisted[name] = version;
-    })
-
-    for (const [name, query] of Object.entries(rootDependencies)) {
-      if (!hoisted[name]) return false;
-      if (query === '*' || query === 'latest') continue;
-
-      if (!satisfies(hoisted[name], query)) return false;
-    }
-
-    return true;
+    const alreadySatisfied = !!lockFile && isAlreadySatisfied(Object.values(lockFile.packages), rootDependencies);
+    return alreadySatisfied;
   }
 
   /**
-   * install npm packages.
+   * build npm tree, and update lock file content, but not install packages
+   */
+  async regenerateLockFile(rootDependencies: { [name: string]: string }): Promise<{
+    lockFile: MiniNPM.LockFile
+    buildTreeResult: Awaited<ReturnType<typeof buildTree>>
+  }> {
+    const prevLockFile = await this.readLockFile();
+    const registry = this.getRegistry();
+
+    const rootPkg: NpmTreeNode = {
+      id: ROOT,
+      name: ROOT,
+      version: '',
+      dependents: {},
+      dependencies: rootDependencies,
+      dist: {} as any,
+    }
+    const packages = { [ROOT]: rootPkg, ...prevLockFile?.packages };
+    packages[ROOT] = rootPkg;
+
+    const hoisted: MiniNPM.LockFile['hoisted'] = {};
+    const tree = await buildTree(packages, registry, {
+      concurrency: this.options.concurrency,
+      onProgress: e => this.events.emit('progress', {
+        type: 'progress',
+        stage: 'fetch-metadata',
+        current: e.current,
+        total: e.total,
+        packageId: e.packageId,
+      }),
+    });
+
+    for (const [name, pkgs] of Object.entries(groupBy(tree.packages, x => x.name))) {
+      let pkg = pkgs[0];
+      let pkgDependentCount = 0
+      for (const i of pkgs.slice(1)) {
+        const cnt = Object.keys(i.dependents).length;
+        if (cnt > pkgDependentCount) {
+          pkg = i;
+          pkgDependentCount = cnt;
+        }
+      }
+
+      if (pkg.id === ROOT) continue;
+      hoisted[name] = pkg.id;
+    }
+
+    const packagesMap = keyBy(tree.packages, x => x.id);
+    this.events.emit('metadata-fetched', { requiredPackages: packagesMap })
+
+    const lockFile: MiniNPM.LockFile = {
+      packages: packagesMap,
+      hoisted,
+    };
+    await this.writeLockFile(lockFile);
+
+    return {
+      buildTreeResult: tree,
+      lockFile: lockFile,
+    }
+  }
+
+  getRegistry = (() => {
+    let result: BuildTreeNPMRegistry | undefined;
+
+    let lastCacheKey = ''
+    const getCacheKey = () => `${this.options.registryUrl}:${this.options.blocklist}`
+
+    return (): BuildTreeNPMRegistry => {
+      const cacheKey = getCacheKey();
+      if (!result || lastCacheKey !== cacheKey) {
+        const actualRegistry = new NPMRegistry(this.options.registryUrl);
+        const isBlocked = listToTestFn(this.options.blocklist);
+
+        lastCacheKey = cacheKey;
+        result = {
+          getPackageJson: memoAsync(async (packageName, version): Promise<MiniNPM.PackageJsonLike> => {
+            // blocklist
+            if (isBlocked(packageName)) return {
+              name: packageName,
+              version,
+              dependencies: {},
+              dist: { tarball: BLOCKED_TAR_PATH }
+            };
+
+            // patch package.json
+            let json = await actualRegistry.getPackageJson(packageName, version);
+            this.options.packageJsonPatches.forEach(fn => json = fn(json) || json);
+            return json;
+          }),
+          getVersionList: (packageName) => actualRegistry.getVersionList(packageName),
+        }
+      }
+
+      return result;
+    }
+  })();
+
+  /**
+   * install missing npm packages.
    * 
    * using symlink to save disk space. be careful with bundlers resolving
    * 
-   * @remarks - use `isAlreadySatisfied()` to avoid unnecessary install
+   * 1. must call `regenerateLockFile()` before installing
+   * 2. use `isAlreadySatisfied()` to avoid unnecessary install
    */
-  async install(rootDependencies: { [name: string]: string }) {
-    const prevLockFile = await this.readLockFile();
-    const tasks = makeParallelTaskMgr();
+  async install() {
+    const { fs } = this
+    const baseDir = this.options.nodeModulesDir;
+    const storeDir = path.join(baseDir, '.store');
+    const hiddenHoistedDir = this.options.shamefullyHoist ? baseDir : path.join(storeDir, 'node_modules');
 
-    const { requiredPackages, reusedInstalledIds } = await this.gatherPackagesToInstall(rootDependencies, prevLockFile?.packages);
-    this.events.emit('metadata-fetched', { requiredPackages, reusedInstalledIds })
+    const lockFile = await this.readLockFile();
+    if (!lockFile) throw new Error('Cannot find lock file. Please call "regenerateLockFile" first.');
+    const packagesArray = Object.values(lockFile.packages);
 
-    // remove previous installed packages, if not reused
-    if (prevLockFile) {
-      const prevHoisted = new Set(prevLockFile.hoisted);
-      for (const [id, dep] of Object.entries(prevLockFile.packages)) {
-        if (dep.id === this.ROOT) continue;
+    // empty node_modules/* exclude .store
+    // empty hidden hoisted dir
+    {
+      const list = tryRun(() => fs.readdirSync(baseDir), []);
+      for (const name of list) {
+        if (name === '.store') continue;
+        fs.rmSync(path.join(baseDir, name), { recursive: true, force: true });
+      }
 
-        // 1. always reset "hoisted"
-        if (prevHoisted.has(id)) this.fs.unlinkSync(`${this.options.nodeModulesDir}/${dep.name}`) // remove symlink
+      fs.rmSync(hiddenHoistedDir, { recursive: true, force: true });
+      fs.mkdirSync(hiddenHoistedDir, { recursive: true });
+    }
 
-        // 2. clean up node_modules
-        const storePath = `${this.options.nodeModulesDir}/.store/${id}`;
-        if (reusedInstalledIds.has(id)) {
-          this.fs.rmSync(`${storePath}/node_modules`, { recursive: true, force: true }); // will be rebuilt later
-        } else {
-          this.fs.rmSync(storePath, { recursive: true, force: true }) // package not reused, remove whole directory
+    // cleanup `.store/*/node_modules`, pour tarballs
+    // existing pkgs will be reused, but its deps will be cleaned up for later linking
+    {
+      const toDeleteIds = new Set(tryRun(() => fs.readdirSync(storeDir), []).filter(x => x !== LOCK_FILENAME));
+      const pourTasks = makeParallelTaskMgr();
+
+      let event: MiniNPM.ProgressEvent = {
+        type: 'progress',
+        stage: 'install-package',
+        packageId: ROOT,
+        current: 0,
+        total: packagesArray.length - 1, // -1 for root
+      }
+
+      for (const pkg of packagesArray) pourTasks.push(() => doPourTask(pkg));
+      const doPourTask = async (pkg: MiniNPM.TreeNode) => {
+        if (pkg.id === ROOT) return;
+
+        const dir = path.join(storeDir, pkg.id, 'node_modules');  // $ROOT/.store/@lyon/foo@1.0.0/node_modules
+        const packageUnzipTo = path.join(dir, pkg.name);      // $ROOT/.store/@lyon/foo@1.0.0/node_modules/@lyon/foo
+
+        toDeleteIds.delete(pkg.id);
+
+        if (fs.existsSync(`${packageUnzipTo}/package.json`)) {
+          // already installed
+          // remove all dependencies' link for later.
+
+          const [s1, s2] = pkg.name.split('/');
+          const links = tryRun(() => fs.readdirSync(dir), []);
+          for (const link1 of links) {
+            const linkPath = path.join(dir, link1)
+            if (link1 === s1) {
+              if (s2) {
+                // is package name like @lyon/foo
+                // dive into and remove other @lyon/*
+                const links2 = tryRun(() => fs.readdirSync(linkPath), []);
+                for (const link2 of links2) {
+                  if (link2 !== s2) fs.unlinkSync(path.join(linkPath, link2));
+                }
+              }
+              // else, package name is merely "foo", no namespace, just skip unlinking
+              continue;
+            }
+
+            // remove link
+            if (link1.startsWith('@')) fs.rmSync(linkPath, { recursive: true, force: true });
+            else fs.unlinkSync(linkPath);
+          }
+
+          return;
         }
-      }
-    }
+        fs.mkdirSync(packageUnzipTo, { recursive: true });
 
-    // build a tree and find out who shall be hoisted (score)
-    const { hoisted } = await this.getHoistedPackages(requiredPackages);
-
-    // install all packages into `${nodeModulesDir}/.store`
-    // meanwhile,
-    //   1. create symlinks to its dependents;
-    //   2. create symlinks to `${nodeModulesDir}` if is Root's dependent, or can be hoisted
-
-    this.fs.mkdirSync(`${this.options.nodeModulesDir}/.store`, { recursive: true });
-
-    let current = 0;
-    let event: MiniNPM.ProgressEvent = {
-      type: 'progress',
-      stage: 'install-package',
-      packageId: this.ROOT,
-      current: 0,
-      total: Object.keys(requiredPackages).length - 1, // -1 for root
-    }
-
-    const createLink = (from: string, dest: string) => {
-      try {
-        this.fs.mkdirSync(path.dirname(dest), { recursive: true });
-        this.fs.symlinkSync(from, dest);
-      } catch (err) {
-        if (String(err).includes('already exists')) return;
-        throw err;
-      }
-    }
-
-    Object.values(requiredPackages).forEach(dep => {
-      if (dep.id === this.ROOT) return;
-
-      tasks.push(async () => {
-        const directory = `${this.options.nodeModulesDir}/.store/${dep.id}`;
-
-        if (!reusedInstalledIds.has(dep.id)) {
-          // new package, need to download
-          // (note: in previous progress, existing packages' node_modules was cleaned up)
-          await this.pourTarball(dep.dist.tarball, directory).catch((err) => {
-            rethrowWithPrefix(err, `cannot pour tarball of ${dep.name}@${dep.version}`);
-          });
-        }
-
-        // then make links to its dependents
-        for (const dependent of Object.keys(dep.dependents)) {
-          if (dependent === this.ROOT) continue; // root's dependents is always hoisted later.
-
-          const dest = `${this.options.nodeModulesDir}/.store/${dependent}/node_modules/${dep.name}`;
-          createLink(directory, dest);
-        }
-
-        // hoist to `${nodeModulesDir}` if is root's dependent, or can be hoisted
-        if (hoisted.has(dep.id)) {
-          const dest = `${this.options.nodeModulesDir}/${dep.name}`;
-          createLink(directory, dest);
-        }
-
-        this.events.emit('progress', {
-          ...event,
-          packageId: dep.id,
-          current: ++current,
-          // total is not changed
-        })
-      });
-    });
-
-    await tasks.run(this.options.concurrency);
-
-    await this.writeLockFile({
-      hoisted: Array.from(hoisted),
-      packages: requiredPackages,
-    })
-  }
-
-  getPackageTarballUrl = async (packageName: string, version: string) => {
-    const packageJson = await this.getPackageJson(packageName, version);
-    return packageJson.dist.tarball;
-    // return `${this.options.registryUrl}/${packageName}/-/${packageName}-${version}.tgz`;
-  }
-
-  async getPackageJson(packageName: string, version: string): Promise<MiniNPM.PackageJsonLike> {
-    const handler =
-      this.options.useJSDelivrToQueryVersions
-        ? this.getPackageJsonDirectly
-        : this.getPackageJsonViaVersions
-
-    const answer = await handler(packageName, version)
-    return this.patchPackageJson(answer);
-  }
-
-  patchPackageJson(packageJson: MiniNPM.PackageJsonLike): MiniNPM.PackageJsonLike {
-    if (symPatched in packageJson) return packageJson;
-
-    packageJson[symPatched] = true;
-    this.options.packageJsonPatches.forEach(patch => {
-      packageJson = patch(packageJson) || packageJson;
-    });
-    return packageJson;
-  }
-
-  cachedFetchJson = memoAsync(async (url: string) => {
-    return fetch(url).then(x => x.json());
-  })
-
-  getPackageJsonViaVersions = memoAsync(async (packageName: string, version: string) => {
-    // this URL has disk cache, might be faster
-    const packageUrl = `${this.options.registryUrl}/${packageName}/`;
-    const registryInfo = await this.cachedFetchJson(packageUrl)
-
-    return registryInfo.versions[version];
-  })
-
-  getPackageJsonDirectly = memoAsync(async (packageName: string, version: string) => {
-    // a bit slower (this URL is api without cache)
-    const url = `${this.options.registryUrl}/${packageName}/${version}`;
-    const res = await this.cachedFetchJson(url);
-
-    return {
-      dependencies: {},
-      ...res,
-    };
-  })
-
-  getPackageVersions(packageName: string): Promise<{
-    versions: string[];
-    tags: Record<string, string>;
-  }> {
-    const handler =
-      this.options.useJSDelivrToQueryVersions
-        ? this.getPackageVersionsWithJSDelivr
-        : this.getPackageVersionsWithRegistry
-
-    return handler(packageName);
-  }
-
-  getPackageVersionsWithJSDelivr = memoAsync(async (packageName: string) => {
-    try {
-      const url = `https://data.jsdelivr.com/v1/package/npm/${packageName}`
-      const res = await this.cachedFetchJson(url)
-      const versions = (res.versions || []) as string[];
-      if (!versions.length) throw new Error(`No versions`);
-
-      return {
-        versions: versions,
-        tags: (res.tags || {}) as Record<string, string>,
-      }
-    } catch (e) {
-      rethrowWithPrefix(e, `Cannot fetch versions of "${packageName}" via jsdelivr`);
-    }
-  })
-
-  getPackageVersionsWithRegistry = memoAsync(async (packageName: string) => {
-    // https://registry.npmjs.org/react/
-    try {
-      const packageUrl = `${this.options.registryUrl}/${packageName}/`;
-      const registryInfo = await this.cachedFetchJson(packageUrl)
-      if (!registryInfo.versions) throw new Error(`No versions`);
-
-      const versions = Object.keys(registryInfo.versions);
-
-      return {
-        versions,
-        tags: (registryInfo['dist-tags'] || {}) as Record<string, string>,
-      }
-    } catch (e) {
-      rethrowWithPrefix(e, `Cannot fetch versions of "${packageName}" via registry`);
-    }
-  })
-
-  /**
-   * internal method: download a tarball and extract it to a directory
-   */
-  async pourTarball(tarballUrl: string, destDir: string) {
-    const { fs } = this;
-
-    if (!destDir.endsWith('/')) destDir += '/';
-    let inflated: Uint8Array;
-
-    if (typeof DecompressionStream !== 'undefined') {
-      const ds = new DecompressionStream("gzip");
-      inflated = new Uint8Array(await new Response((await fetch(tarballUrl)).body?.pipeThrough(ds)).arrayBuffer())
-    } else {
-      const pako = await import('pako');
-      const tarball = await fetch(tarballUrl).then(x => x.arrayBuffer());
-      inflated = pako.ungzip(new Uint8Array(tarball))
-    }
-
-    const tar = TarStream.extract();
-    let accOffset = 0;
-    tar.on('entry', (header, stream, next) => {
-      const dataOffset = accOffset + 512; // tar header size
-
-      {
-        // Calculate the next file's offset
-        const blockSize = 512;
-        const fileBlocks = Math.ceil((header.size || 0) / blockSize);
-        accOffset += (fileBlocks + 1) * blockSize; // +1 for the header block
-      }
-
-      const fileName = header.name.replace(/^package\//, destDir);
-
-      if (fileName.endsWith('/')) {
         try {
-          fs.mkdirSync(fileName, { recursive: true });
-          next();
-        } catch (err) {
-          next(err);
+          event.packageId = pkg.id;
+          this.events.emit('progress', { ...event });
+
+          const tarballUrl = pkg.dist.tarball;
+          if (tarballUrl !== BLOCKED_TAR_PATH) {
+            await pourTarball({
+              fs,
+              tarballUrl,
+              destDir: packageUnzipTo,
+            })
+          }
+
+          // write the patched package.json from the registry
+          const json = await this.getRegistry().getPackageJson(pkg.name, pkg.version);
+          fs.writeFileSync(path.join(packageUnzipTo, 'package.json'), JSON.stringify(json, null, 2));
+        } finally {
+          event.packageId = pkg.id;
+          event.current++;
+          this.events.emit('progress', { ...event });
         }
-        return;
       }
+      await pourTasks.run(this.options.concurrency);
+    }
 
-      // make dir recrusive
-      const dirName = path.dirname(fileName);
-      if (dirName) fs.mkdirSync(dirName, { recursive: true });
+    // links for hidden hoisted packages
+    for (const [pkgName, dependentId] of Object.entries(lockFile.hoisted)) {
+      const linkTo = path.join(storeDir, dependentId, 'node_modules', pkgName);
+      const linkFrom = path.join(hiddenHoistedDir, pkgName);
 
-      let data = inflated.slice(dataOffset, dataOffset + header.size!);
-      if (fileName === 'package.json') {
-        const str = new TextDecoder().decode(data);
-        let json = JSON.parse(str) as MiniNPM.PackageJsonLike;
-        json = this.patchPackageJson(json);
-        fs.writeFileSync(fileName, JSON.stringify(json, null, 2));
+      if (pkgName[0] === '@') fs.mkdirSync(path.dirname(linkFrom), { recursive: true });
+      fs.symlinkSync(linkTo, linkFrom);
+    }
+
+    // all pkgs are ready and dirs are made, create links
+    {
+      for (const pkg of packagesArray) {
+        // assuming current pkg is "vue"
+        for (const expr of Object.keys(pkg.dependents)) {
+          // depInfo = "@yon/app/vue" or "@yon/app/vue2"
+          const [dependentId, dstName] = pathToNpmPackage(expr);
+
+          const linkTo = path.join(storeDir, pkg.id, 'node_modules', pkg.name);
+          const linkFrom = dependentId === ROOT ? path.join(baseDir, dstName) : path.join(storeDir, dependentId, 'node_modules', dstName);
+
+          if (dstName[0] === '@') fs.mkdirSync(path.dirname(linkFrom), { recursive: true });
+          if (fs.existsSync(linkFrom)) fs.unlinkSync(linkFrom); // about the shamefully-hoisted package
+          fs.symlinkSync(linkTo, linkFrom);
+        }
       }
-      fs.writeFileSync(fileName, data);
-      // if (header.name === 'package/package.json') packageJson = JSON.parse(decodeUTF8(data));
+    }
+  }
+}
 
-      stream.on('end', () => Promise.resolve().then(next))
-      stream.resume();
-    });
-
-    await new Promise((resolve, reject) => {
-      tar.on('finish', resolve);
-      tar.on('error', reject);
-      tar.end(inflated);
-    });
+function tryRun<T>(fn: () => T, defaults: T) {
+  try {
+    return fn();
+  } catch {
+    return defaults;
   }
 }
