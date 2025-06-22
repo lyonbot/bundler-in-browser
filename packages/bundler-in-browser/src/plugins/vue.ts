@@ -1,11 +1,30 @@
 import { stringHash } from 'yon-utils';
 import * as compiler from 'vue/compiler-sfc';
-import { type Position } from '@vue/compiler-core';
+import { type Position, type SourceLocation } from '@vue/compiler-core';
 import type { BundlerInBrowser } from "../BundlerInBrowser.js";
 import type esbuild from "esbuild-wasm";
 import path from "path";
 import { memoAsync, stripQuery } from '../utils/index.js';
 import { countChar, toBase64 } from '../utils/string.js';
+
+export interface InstallVuePluginOptions {
+  disableOptionsApi?: boolean;
+  enableProdDevTools?: boolean;
+  enableHydrationMismatchDetails?: boolean;
+  isProd?: boolean;
+
+  /** only works with `<script setup>`. might made HMR fails. */
+  inlineTemplate?: boolean;
+
+  /** whether inject HMR related code `__VUE_HMR_RUNTIME__.createRecord(hmrId, sfcMain)` */
+  hmr?: boolean;
+
+  /** 
+   * custom HMR id generator. works with `hmr: true`.
+   * 
+   * defaults to `filePath => filePath` */
+  hmrId?: (filePath: string) => string | Promise<string>;
+}
 
 const COMP_IDENTIFIER = '__vue_component__';
 function getFullPath(args: esbuild.OnResolveArgs) {
@@ -69,57 +88,46 @@ function getLineText(source: string, line: number) {
 
 type BabelSyntaxError = Error & { loc: { line: number, column: number, index: number, source: undefined } }
 
-function toESBuildError(
-  e: string | SyntaxError | compiler.CompilerError | BabelSyntaxError,
-  ctx: {
-    offsetToPosition?: (offset: number) => { line: number, column: number, lineText?: string }
-    currentFile: string
-  }
-): esbuild.PartialMessage {
-  if (typeof e === 'string') return { text: e };
+function makeToEsBuildErrorFunction(ctx: {
+  offsetToPosition?: (offset: number) => { line: number; column: number; lineText?: string; };
+  currentFile: string;
+}) {
+  function toESBuildError(
+    e: string | SyntaxError | compiler.CompilerError | BabelSyntaxError
+  ): esbuild.PartialMessage {
+    if (typeof e === 'string') return { text: e };
 
-  if (e instanceof Error) {
-    if ('loc' in e && e.loc) {
-      let start: Position, end: Position
+    if (e instanceof Error) {
+      if ('loc' in e && e.loc) {
+        let start: Position, end: Position;
 
-      if ('start' in e.loc) {
-        // vue error
-        start = e.loc.start
-        end = e.loc.end || start
-      } else {
-        // babel error
-        end = start = { line: e.loc.line, column: e.loc.column, offset: e.loc.index }
-      }
+        if ('start' in e.loc) {
+          // vue error
+          start = e.loc.start;
+          end = e.loc.end || start;
+        } else {
+          // babel error
+          end = start = { line: e.loc.line, column: e.loc.column, offset: e.loc.index };
+        }
 
-      const locator = ctx.offsetToPosition?.(start.offset) || { line: start.line, column: start.column }
-      return {
-        text: e.message,
-        location: {
-          file: e.loc.source || ctx.currentFile,
-          ...locator,
-          length: end.offset - start.offset,
-        },
-      }
-    };
-    return { text: e.message };
-  }
+        const locator = ctx.offsetToPosition?.(start.offset) || { line: start.line, column: start.column };
+        return {
+          text: e.message,
+          location: {
+            file: e.loc.source || ctx.currentFile,
+            ...locator,
+            length: end.offset - start.offset,
+          },
+        };
+      };
+      return { text: e.message };
+    }
 
-  return { text: String(e) }
-}
+    return { text: String(e) };
+  };
 
-export interface InstallVuePluginOptions {
-  disableOptionsApi?: boolean;
-  enableProdDevTools?: boolean;
-  enableHydrationMismatchDetails?: boolean;
-
-  /** whether inject HMR related code `__VUE_HMR_RUNTIME__.createRecord(hmrId, sfcMain)` */
-  hmr?: boolean;
-
-  /** 
-   * custom HMR id generator. works with `hmr: true`.
-   * 
-   * defaults to `filePath => filePath` */
-  hmrId?: (filePath: string) => string | Promise<string>;
+  toESBuildError.ctx = ctx;
+  return toESBuildError;
 }
 
 export interface VuePluginInstance {
@@ -133,6 +141,8 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
       disableOptionsApi: false,
       enableProdDevTools: false,
       enableHydrationMismatchDetails: false,
+      isProd: false,
+      inlineTemplate: false,
       hmr: false,
       hmrId: (filePath: string) => filePath,
       ...opts,
@@ -144,6 +154,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
     name: "vue-loader",
     setup(build) {
       const opts = instance.options;
+      const isProd = opts.isProd;
       build.initialOptions.define = {
         "__VUE_OPTIONS_API__": opts.disableOptionsApi ? "false" : "true",
         "__VUE_PROD_DEVTOOLS__": opts.enableProdDevTools ? "true" : "false",
@@ -151,15 +162,13 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         ...build.initialOptions.define,
       }
 
-      const isProd = build.initialOptions.minify !== false;
-
       // Resolve main ".vue" import
       build.onResolve({ filter: /\.vue/ }, async (args) => {
         const params = getUrlParams(args.path);
 
         let namespace = 'file';
         if (params.type === "script") namespace = "sfc-script";
-        // else if (params.type === "template") namespace = "sfc-template"; // yet integrated in `.vue` onLoad
+        else if (params.type === "template") namespace = "sfc-template";
         else if (params.type === "style") namespace = "sfc-style";
 
         return {
@@ -167,24 +176,24 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           namespace,
           pluginData: {
             ...args.pluginData,
-            index: params.index,
+            index: params.index, // not in `vue: ...`
           }
         }
       });
 
       build.onLoad({ filter: /./, namespace: "sfc-style" }, async (args) => {
-        const descriptor = args.pluginData.vue.descriptor as compiler.SFCDescriptor;
-        const id = args.pluginData.vue.id;
-        const toESBuildErrorCtx = args.pluginData.vue.toESBuildErrorCtx;
+        const vuePluginData = args.pluginData.vue as VuePluginMiddleData;
+        const { descriptor, id, toESBuildError } = vuePluginData;
         const style = descriptor.styles[args.pluginData.index];
 
         const preprocessCustomRequire = /s[ac]ss/.test(style.lang!) ? await getPreprocessCustomRequireWithSass() : undefined
 
         // TODO: "style.module" not supported yet
 
-        const { code, errors: errorsAll } = await compiler.compileStyleAsync({
+        const { code, map, errors: errorsAll } = await compiler.compileStyleAsync({
           filename: descriptor.filename,
           id: id,
+          isProd,
           scoped: style.scoped,
           modules: !!style.module,
           source: style.content,
@@ -197,50 +206,81 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           errors: errors.map((e: any): esbuild.PartialMessage => ({
             text: 'style: ' + (e.reason || e.message || e),
             location: {
-              file: toESBuildErrorCtx.currentFile,
+              file: toESBuildError.ctx.currentFile,
               ...e.line >= 1 ? {   // for css
                 line: e.line - 1 + style.loc.start.line,
                 column: e.column - 1,
                 lineText: getLineText(e.source, e.line),
               } : null,
               ...e.sassStack && e.span ? {   // for sass
-                ...toESBuildErrorCtx.offsetToPosition?.(e.span.start.offset + style.loc.start.offset),
+                ...toESBuildError.ctx.offsetToPosition?.(e.span.start.offset + style.loc.start.offset),
               } : null,
             }
           }))
         };
 
+        let finalCode = code;
+        if (map) {
+          const mapStr = JSON.stringify(map);
+          finalCode += '\n\n' + `/*# sourceMappingURL=data:application/json;base64,${toBase64(mapStr)} */`;
+        }
+
         return await bundler.pluginUtils.applyPostProcessors(args, {
-          contents: code,
+          contents: finalCode,
           loader: 'css',
           pluginData: { ...args.pluginData }
         })
       })
 
+      build.onLoad({ filter: /./, namespace: "sfc-template" }, async (args) => {
+        // Note: shall after `sfc-script` loader
+        // because it might need to know `bindingMetadata` from `scriptSetup`
+        const vuePluginData = args.pluginData.vue as VuePluginMiddleData;
+        const { bindingMetadata, templateCompileOptions, toESBuildError } = vuePluginData;
+
+        if (!templateCompileOptions) {
+          return {
+            loader: 'js',
+            contents: 'export function render() {}',
+            errors: [{ text: 'template compiler options not found' }]
+          }
+        }
+
+        // `bindingMetadata` from `scriptSetup` is now available
+        templateCompileOptions.compilerOptions!.bindingMetadata = bindingMetadata;
+
+        const { code: rawCode, errors } = compiler.compileTemplate(templateCompileOptions);
+        if (errors.length > 0) return { errors: errors.map(e => toESBuildError(e)) };
+
+        // rawCode contains `export (function|const) (render|ssrRender)`
+
+        return await bundler.pluginUtils.applyPostProcessors(args, {
+          contents: rawCode,
+          loader: 'js',
+          pluginData: {
+            ...args.pluginData,
+          }
+        });
+      })
+
       build.onLoad({ filter: /./, namespace: "sfc-script" }, async (args) => {
-        const descriptor = args.pluginData.vue.descriptor as compiler.SFCDescriptor;
-        const { id, scopeId, expressionPlugins, toESBuildErrorCtx, esbuildLoader, hasJSX } = args.pluginData.vue;
+        const vuePluginData = args.pluginData.vue as VuePluginMiddleData;
+        const { descriptor, templateCompileOptions, id, hasTS, hasJSX, toESBuildError } = vuePluginData;
 
         const filename = descriptor.filename;
         let compiledScript: ReturnType<typeof compiler.compileScript>;
         try {
           compiledScript = compiler.compileScript(descriptor, {
-            inlineTemplate: true,
+            inlineTemplate: instance.options.inlineTemplate,
             id,
+            isProd,
             genDefaultAs: COMP_IDENTIFIER,
             fs: {
               fileExists: (file) => bundler.fs.existsSync(file),
               readFile: (file) => { try { return bundler.fs.readFileSync(file, 'utf8') as string; } catch { } },
               realpath: (file) => bundler.fs.realpathSync(file, { encoding: 'utf8' }) as string,
             },
-            templateOptions: {
-              ast: descriptor.template?.ast,
-              compilerOptions: {
-                filename,
-                scopeId,
-                expressionPlugins,
-              },
-            },
+            templateOptions: templateCompileOptions || undefined,
           });
         } catch (e) {
           if ('loc' in (e as any)) {
@@ -271,10 +311,10 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
             loc.column += offsetPos!.column
             loc.index += offsetPos!.offset
           }
-          return { errors: [toESBuildError(e as SyntaxError, toESBuildErrorCtx)] }
+          return { errors: [toESBuildError(e as SyntaxError)] }
         }
 
-        const errors = compiledScript.warnings?.map(e => toESBuildError(e, toESBuildErrorCtx)) || [];
+        const errors = compiledScript.warnings?.map(e => toESBuildError(e)) || [];
         if (errors.length > 0) return { errors };
 
         let codePrefix = '';
@@ -288,6 +328,13 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           map.mappings = ';'.repeat(countChar(codePrefix, '\n')) + map.mappings
           codeSuffix += '\n\n//# sourceMappingURL=data:application/json;base64,' + toBase64(JSON.stringify(map))
         }
+
+        // for `sfc-template` loader
+        vuePluginData.bindingMetadata = compiledScript.bindings;
+
+        let esbuildLoader: esbuild.Loader = 'js';
+        if (hasTS) esbuildLoader = 'ts';
+        if (hasJSX) esbuildLoader = (esbuildLoader + 'x') as 'jsx' | 'tsx';
 
         return await bundler.pluginUtils.applyPostProcessors(args, {
           contents: codePrefix + compiledScript.content + codeSuffix,
@@ -309,13 +356,13 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           sourceMap: true,
         });
 
-        const toESBuildErrorCtx: Parameters<typeof toESBuildError>[1] = {
+        const toESBuildError = makeToEsBuildErrorFunction({
           currentFile: descriptor.filename,
           offsetToPosition: (offset: number) => offsetToPosition(code, offset),
-        }
+        })
         if (errors.length > 0) return {
           contents: code,
-          errors: errors.map(e => toESBuildError(e, toESBuildErrorCtx))
+          errors: errors.map(e => toESBuildError(e))
         };
 
         const hasScopedStyle = descriptor.styles.some(s => s.scoped);
@@ -347,25 +394,31 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           outCodeParts.push(`import "${encPath}?type=style&index=${index}";`);
         }
 
-        // template (note: if `scriptSetup` exists, it will be compiled by `scriptSetup`)
-        if (descriptor.template && !descriptor.scriptSetup) {
-          const { code: rawCode, errors } = compiler.compileTemplate({
-            isProd,
-            id,
-            ast: descriptor.template.ast,
-            source: descriptor.template.content,
-            filename: descriptor.filename,
-            scoped: hasScopedStyle,
-            slotted: descriptor.slotted,
-            compilerOptions: {
-              filename,
-              expressionPlugins,
-            },
-          });
-          if (errors.length > 0) return { errors: errors.map(e => toESBuildError(e, toESBuildErrorCtx)) };
-
+        // template (note: if `inlineTemplate=true` and `scriptSetup` exists, it will be handled later by `scriptSetup`)
+        const templateDescriptor = descriptor.template;
+        const templateCompileOptions: compiler.SFCTemplateCompileOptions | false = !!templateDescriptor && {
+          isProd,
+          id,
+          ast: templateDescriptor.ast,
+          source: templateDescriptor.content,
+          filename: descriptor.filename,
+          scoped: hasScopedStyle,
+          slotted: descriptor.slotted,
+          // transformAssetUrls
+          // preprocessLang
+          // preprocessOptions
+          compilerOptions: {
+            filename,
+            // bindingMetadata: descriptor.scriptSetup?.bindings, // yet no data, will be filled later.
+            scopeId,
+            expressionPlugins,
+            // sourceMap: true,
+            hmr: !!instance.options.hmr,
+          },
+        }
+        if (templateCompileOptions && (!instance.options.inlineTemplate || !descriptor.scriptSetup)) {
           outCodeParts.push(
-            rawCode.replace(/\nexport (function|const) (render|ssrRender)/, '$1 ___render'),
+            `import { render as ___render } from "${encPath}?type=template";`,
             `${COMP_IDENTIFIER}.render = ___render`,
           );
         }
@@ -389,16 +442,22 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           );
         }
 
-        let loader: esbuild.Loader = 'js';
-        if (hasTS) loader = 'ts';
-        if (hasJSX) loader = (loader + 'x') as 'jsx' | 'tsx';
+        const vuePluginMiddleData: VuePluginMiddleData = {
+          descriptor,
+          templateCompileOptions,
+          id,
+          scopeId,
+          hasJSX: !!hasJSX,
+          hasTS: !!hasTS,
+          toESBuildError,
+        }
 
         return await bundler.pluginUtils.applyPostProcessors(args, {
           contents: outCodeParts.join('\n'),
-          loader,
+          loader: 'js',
           watchFiles: [filename],
           pluginData: {
-            vue: { descriptor, id, scopeId, expressionPlugins, toESBuildErrorCtx, esbuildLoader: loader, hasTS, hasJSX }
+            vue: vuePluginMiddleData
           }
         })
       })
@@ -409,6 +468,23 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
   bundler.commonPlugins.push(plugin);
 
   return instance;
+}
+
+/** 
+ * when first .vue loader returns,
+ * it will pass this via esbuild's `pluginData.vue` to 
+ * other loaders like sfc-script and sfc-style.
+ */
+interface VuePluginMiddleData {
+  descriptor: compiler.SFCDescriptor;
+  templateCompileOptions: compiler.SFCTemplateCompileOptions | false;
+  id: string;
+  scopeId: string | null;
+  toESBuildError: ReturnType<typeof makeToEsBuildErrorFunction>;
+  hasJSX: boolean;
+  hasTS: boolean;
+
+  bindingMetadata?: compiler.BindingMetadata; // populated by `scriptSetup`
 }
 
 const getPreprocessCustomRequireWithSass = memoAsync(async () => {
