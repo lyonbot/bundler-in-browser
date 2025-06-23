@@ -19,6 +19,13 @@ export interface InstallVuePluginOptions {
   /** whether inject HMR related code `__VUE_HMR_RUNTIME__.createRecord(hmrId, sfcMain)` */
   hmr?: boolean;
 
+  /**
+   * options for template compiler, including ParserOptions & TransformOptions & CodegenOptions
+   * 
+   * for example, use `nodeTransforms` to add custom attrs
+   */
+  templateCompilerOptions?: compiler.SFCTemplateCompileOptions['compilerOptions'];
+
   /** 
    * custom HMR id generator. works with `hmr: true`.
    * 
@@ -408,6 +415,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           // preprocessLang
           // preprocessOptions
           compilerOptions: {
+            ...instance.options.templateCompilerOptions,
             filename,
             // bindingMetadata: descriptor.scriptSetup?.bindings, // yet no data, will be filled later.
             scopeId,
