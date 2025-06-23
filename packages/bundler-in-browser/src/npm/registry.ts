@@ -24,6 +24,8 @@ export class NPMRegistry implements BuildTreeNPMRegistry {
 
   /**
    * get package.json of a specific version
+   * 
+   * note: this will contains `dist: { tarball, shasum, integrity }` field
    */
   getPackageJson = async (packageName: string, version: string) => {
     // npm registry already ship 
