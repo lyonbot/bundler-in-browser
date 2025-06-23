@@ -6,7 +6,7 @@ import { pourTarball } from "./npm/tarball.js";
 import { buildTree, isAlreadySatisfied, ROOT, type BuildTreeNPMRegistry, type NpmTreeNode } from "./npm/tree.js";
 import { makeParallelTaskMgr } from "./parallelTask.js";
 import { listToTestFn, memoAsync, pathToNpmPackage } from "./utils/index.js";
-import { groupBy, keyBy } from "./utils/misc.js";
+import { groupBy, keyBy, pickBy } from "./utils/misc.js";
 
 const LOCK_FILENAME = 'lock.json';
 
@@ -219,6 +219,7 @@ export class MiniNPM {
       if (!result || lastCacheKey !== cacheKey) {
         const actualRegistry = new NPMRegistry(this.options.registryUrl);
         const isBlocked = listToTestFn(this.options.blocklist);
+        const allow2 = (_: any, name: string) => !isBlocked(name);
 
         lastCacheKey = cacheKey;
         result = {
@@ -233,6 +234,12 @@ export class MiniNPM {
 
             // patch package.json
             let json = await actualRegistry.getPackageJson(packageName, version);
+            json = {
+              ...json,
+              dependencies: pickBy(json.dependencies, allow2),
+              peerDependencies: pickBy(json.peerDependencies, allow2),
+              peerDependenciesMeta: pickBy(json.peerDependenciesMeta, allow2),
+            }
             this.options.packageJsonPatches.forEach(fn => json = fn(json) || json);
             return json;
           }),

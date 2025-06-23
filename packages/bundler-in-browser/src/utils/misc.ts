@@ -28,6 +28,15 @@ export function toArray<T>(obj: Iterable<T> | T): NonNullable<T>[] {
   return [obj as NonNullable<T>];
 }
 
+export function pickBy<T extends Record<string, any>>(obj: T | null | undefined, fn: (value: T[keyof T], key: string & keyof T) => boolean): Partial<T> {
+  if (!obj) return {};
+  const result = {} as Partial<T>;
+  for (const key in obj) {
+    if (fn(obj[key], key)) result[key] = obj[key];
+  }
+  return result;
+}
+
 export function groupBy<T>(arr: Iterable<T> | undefined | null, keyFn: (x: T) => string) {
   const obj = {} as Record<string, T[]>;
   for (const item of arr || []) {
