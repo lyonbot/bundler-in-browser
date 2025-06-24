@@ -63,13 +63,13 @@
     }
   },
   "peerDependencies": {
+    "esbuild-wasm": "*",
     "@zenfs/core": "^2.2.0",
     "sass": "^1.77.8",
     "vue": "^3.2.14"
   },
   "dependencies": {
     "buffer": "^6.0.3",
-    "esbuild-wasm": "^0.25.5",
     "events": "^3.3.0",
     "pako": "^2.1.0",
     "path-browserify": "^1.0.1",
@@ -86,6 +86,7 @@
     "@vue/compiler-core": "^3.5.15",
     "@zenfs/core": "^2.2.3",
     "enhanced-resolve": "^5.18.1",
+    "esbuild-wasm": "^0.25.5",
     "postcss": "^8.5.3",
     "sass": "^1.89.0",
     "tar-stream": "^3.1.7",

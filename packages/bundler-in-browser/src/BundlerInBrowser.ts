@@ -113,11 +113,18 @@ export class BundlerInBrowser {
 
   static readonly esbuildVersion = esbuild.version;
 
-  async initialize(opt: { esbuildWasmURL?: string | URL } = {}) {
+  async initialize(opt: {
+    /** esbuild wasm url. defaults to `` ({ version }) => `https://cdn.jsdelivr.net/npm/esbuild-wasm@${version}/esbuild.wasm` `` */
+    esbuildWasmURL?: string | URL | ((ctx: { version: string }) => string | URL)
+  } = {}) {
     if (!this.initialized) {
+      let wasmURL = opt.esbuildWasmURL;
+      if (typeof wasmURL === 'function') wasmURL = wasmURL({ version: esbuild.version });
+      if (!wasmURL) wasmURL = `https://cdn.jsdelivr.net/npm/esbuild-wasm@${esbuild.version}/esbuild.wasm`;
+
       this.initialized = esbuild.initialize({
-        wasmURL: opt.esbuildWasmURL || `https://cdn.jsdelivr.net/npm/esbuild-wasm@${esbuild.version}/esbuild.wasm`
-        // wasmModule: await WebAssembly.compileStreaming(fetch('/node_modules/esbuild-wasm/esbuild.wasm'))
+        wasmURL,
+        // wasmModule: await WebAssembly.compileStreaming(fetch('/node_modules/esbuild-wasm/esbuild.wasm')),
       });
     }
     await this.initialized;
