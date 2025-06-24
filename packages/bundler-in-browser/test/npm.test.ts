@@ -65,7 +65,7 @@ describe('npm', () => {
     // ----------------------------------------------
     // delete react
 
-    const x = await npm.regenerateLockFile({
+    await npm.regenerateLockFile({
       'dirty': '2.0.0',
     })
     await npm.install()

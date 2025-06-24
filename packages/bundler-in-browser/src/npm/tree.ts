@@ -185,7 +185,7 @@ export async function buildTree(
   });
 
   const peerDepWarnings: Array<PeerDepWarning> = [];
-  for (let retry = packagesMap.size * 5; retry--;) {
+  for (let retry = packagesMap.size * 5; retry >= 0; retry--) {
     const packages = Array.from(packagesMap.values());
     const pkg = packages.find(it => (!it.peerDependenciesLinked && isNotEmpty(it.peerDependencies)))
     if (!pkg) break;
