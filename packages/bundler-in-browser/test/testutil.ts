@@ -1,6 +1,5 @@
 import SemVer from 'semver';
 import path from 'path';
-import { memoAsync } from '../src/utils/memoAsync.js';
 import type { MiniNPM } from '../src/MiniNPM.js';
 import { InMemory, fs } from '@zenfs/core';
 import { BundlerInBrowser } from 'bundler-in-browser';
