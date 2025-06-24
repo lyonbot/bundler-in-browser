@@ -15,7 +15,7 @@ A powerful in-browser bundler that automatically installs npm packages, powered 
 ## Installation
 
 ```sh
-npm install bundler-in-browser
+npm install bundler-in-browser esbuild-wasm
 
 # Optional but recommended for virtual filesystem support
 npm install @zenfs/core path-browserify
