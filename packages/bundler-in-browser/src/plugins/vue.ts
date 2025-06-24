@@ -1,6 +1,6 @@
 import { stringHash } from 'yon-utils';
 import * as compiler from 'vue/compiler-sfc';
-import { type Position, type SourceLocation } from '@vue/compiler-core';
+import { type Position } from '@vue/compiler-core';
 import type { BundlerInBrowser } from "../BundlerInBrowser.js";
 import type esbuild from "esbuild-wasm";
 import path from "path";
@@ -16,15 +16,28 @@ export interface InstallVuePluginOptions {
   /** only works with `<script setup>`. might made HMR fails. */
   inlineTemplate?: boolean;
 
-  /** whether inject HMR related code `__VUE_HMR_RUNTIME__.createRecord(hmrId, sfcMain)` */
-  hmr?: boolean;
-
   /**
    * options for template compiler, including ParserOptions & TransformOptions & CodegenOptions
    * 
    * for example, use `nodeTransforms` to add custom attrs
    */
-  templateCompilerOptions?: compiler.SFCTemplateCompileOptions['compilerOptions'];
+  templateCompilerOptions?: Partial<compiler.SFCTemplateCompileOptions['compilerOptions']>;
+
+  /**
+   * inject extra code to sfc runtime, before `export default ___vue_component__`
+   */
+  injectSFCRuntime?: (ctx: {
+    filePath: string,
+    /** the exported identifier of SFC. usually is `__vue_component__` */
+    COMP_IDENTIFIER: string,
+    /** only valid when scoped style exists */
+    scopeId?: string,
+    /** only valid when hmr is enabled. usually equals to `__vue_component__.__hmrId` */
+    hmrId?: string
+  }) => string | Promise<string>;
+
+  /** whether inject HMR related code `__VUE_HMR_RUNTIME__.createRecord(hmrId, sfcMain)` */
+  hmr?: boolean;
 
   /** 
    * custom HMR id generator. works with `hmr: true`.
@@ -142,16 +155,22 @@ export interface VuePluginInstance {
   plugin: esbuild.Plugin;
 }
 
+const defaultOptions: Required<InstallVuePluginOptions> = {
+  disableOptionsApi: false,
+  enableProdDevTools: false,
+  enableHydrationMismatchDetails: false,
+  isProd: false,
+  inlineTemplate: false,
+  templateCompilerOptions: {},
+  hmr: false,
+  hmrId: (filePath) => filePath,
+  injectSFCRuntime: () => '',
+}
+
 export default function installVuePlugin(bundler: BundlerInBrowser, opts: InstallVuePluginOptions = {}) {
   const instance: VuePluginInstance = {
     options: {
-      disableOptionsApi: false,
-      enableProdDevTools: false,
-      enableHydrationMismatchDetails: false,
-      isProd: false,
-      inlineTemplate: false,
-      hmr: false,
-      hmrId: (filePath: string) => filePath,
+      ...defaultOptions,
       ...opts,
     },
     plugin: null as unknown as esbuild.Plugin, // assign later
@@ -432,8 +451,9 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         }
 
         // hmr
-        if (instance.options.hmr) {
-          const hmrIdEscaped = JSON.stringify(String(await instance.options.hmrId(filename)))
+        let hmrId = instance.options.hmr && String(await instance.options.hmrId(filename));
+        if (hmrId) {
+          const hmrIdEscaped = JSON.stringify(hmrId)
           outCodeParts.push(
             `${COMP_IDENTIFIER}.__hmrId = ${hmrIdEscaped};`,
             `typeof __VUE_HMR_RUNTIME__ !== 'undefined' && __VUE_HMR_RUNTIME__.createRecord(${hmrIdEscaped}, ${COMP_IDENTIFIER});`,
@@ -441,14 +461,25 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         }
 
         // misc
-        {
-          if (scopeId) outCodeParts.push(`${COMP_IDENTIFIER}.__scopeId = ${JSON.stringify(scopeId)}`);
+        if (scopeId) outCodeParts.push(
+          `${COMP_IDENTIFIER}.__scopeId = ${JSON.stringify(scopeId)}`
+        );
+        outCodeParts.push(
+          `${COMP_IDENTIFIER}.__file = ${JSON.stringify(filename)}`
+        );
 
-          outCodeParts.push(
-            `${COMP_IDENTIFIER}.__file = ${JSON.stringify(filename)}`,
-            `export default ${COMP_IDENTIFIER}`
-          );
-        }
+        // inject sfc runtime
+        const extraInject = await instance.options.injectSFCRuntime({
+          COMP_IDENTIFIER,
+          filePath: filename,
+          scopeId: scopeId || undefined,
+          hmrId: hmrId || undefined,
+        });
+        if (extraInject) outCodeParts.push(extraInject);
+
+        outCodeParts.push(
+          `export default ${COMP_IDENTIFIER}`
+        )
 
         const vuePluginMiddleData: VuePluginMiddleData = {
           descriptor,
