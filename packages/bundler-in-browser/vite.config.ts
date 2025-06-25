@@ -17,7 +17,29 @@ export default defineConfig({
       'stream': 'streamx',
     }
   },
-  plugins: [dts({ rollupTypes: true })],
+  plugins: [
+    dts({ rollupTypes: true }),
+    {
+      name: 'worker-patch-maker',
+      async load(id) {
+        if (id.includes('?built')) {
+          const esbuild = await import('esbuild')
+          const path = id.replace(/\?.*/, '')
+          const out = await esbuild.build({
+            entryPoints: [path],
+            write: false,
+            bundle: true,
+            format: 'iife',
+          })
+
+          this.addWatchFile(path)
+          return {
+            code: 'export default ' + JSON.stringify(out.outputFiles[0].text),
+          }
+        }
+      },
+    }
+  ],
   build: {
     minify: !IS_DEVELOPMENT,
     rollupOptions: {
@@ -28,9 +50,10 @@ export default defineConfig({
       ]
     },
     lib: {
-      entry: './src/index.ts',
+      entry: {
+        index: './src/index.ts',
+      },
       formats: ['cjs', 'es'],
-      fileName: 'index',
       name: 'BundlerInBrowser'
     }
   },

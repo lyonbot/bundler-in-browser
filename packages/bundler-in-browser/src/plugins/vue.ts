@@ -3,7 +3,7 @@ import * as compiler from 'vue/compiler-sfc';
 import { type Position } from '@vue/compiler-core';
 import type { BundlerInBrowser } from "../BundlerInBrowser.js";
 import type esbuild from "esbuild-wasm";
-import path from "path";
+import path, { dirname } from "path";
 import { memoAsync, stripQuery } from '../utils/index.js';
 import { countChar, toBase64 } from '../utils/string.js';
 
@@ -209,7 +209,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
 
       build.onLoad({ filter: /./, namespace: "sfc-style" }, async (args) => {
         const vuePluginData = args.pluginData.vue as VuePluginMiddleData;
-        const { descriptor, id, toESBuildError } = vuePluginData;
+        const { descriptor, id, filename, toESBuildError } = vuePluginData;
         const style = descriptor.styles[args.pluginData.index];
 
         const preprocessCustomRequire = /s[ac]ss/.test(style.lang!) ? await getPreprocessCustomRequireWithSass() : undefined
@@ -252,6 +252,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         }
 
         return await bundler.pluginUtils.applyPostProcessors(args, {
+          resolveDir: dirname(filename),
           contents: finalCode,
           loader: 'css',
           pluginData: { ...args.pluginData }
@@ -262,12 +263,13 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         // Note: shall after `sfc-script` loader
         // because it might need to know `bindingMetadata` from `scriptSetup`
         const vuePluginData = args.pluginData.vue as VuePluginMiddleData;
-        const { bindingMetadata, templateCompileOptions, toESBuildError } = vuePluginData;
+        const { filename, bindingMetadata, templateCompileOptions, toESBuildError } = vuePluginData;
 
         if (!templateCompileOptions) {
           return {
-            loader: 'js',
+            resolveDir: dirname(filename),
             contents: 'export function render() {}',
+            loader: 'js',
             errors: [{ text: 'template compiler options not found' }]
           }
         }
@@ -281,6 +283,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         // rawCode contains `export (function|const) (render|ssrRender)`
 
         return await bundler.pluginUtils.applyPostProcessors(args, {
+          resolveDir: dirname(filename),
           contents: rawCode,
           loader: 'js',
           pluginData: {
@@ -363,10 +366,11 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         if (hasJSX) esbuildLoader = (esbuildLoader + 'x') as 'jsx' | 'tsx';
 
         return await bundler.pluginUtils.applyPostProcessors(args, {
+          resolveDir: dirname(filename),
           contents: codePrefix + compiledScript.content + codeSuffix,
           loader: esbuildLoader,
           watchFiles: [filename],
-          pluginData: { ...args.pluginData }
+          pluginData: { ...args.pluginData },
         })
       })
 
@@ -387,6 +391,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           offsetToPosition: (offset: number) => offsetToPosition(code, offset),
         })
         if (errors.length > 0) return {
+          resolveDir: dirname(filename),
           contents: code,
           errors: errors.map(e => toESBuildError(e))
         };
@@ -485,6 +490,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           descriptor,
           templateCompileOptions,
           id,
+          filename,
           scopeId,
           hasJSX: !!hasJSX,
           hasTS: !!hasTS,
@@ -492,6 +498,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         }
 
         return await bundler.pluginUtils.applyPostProcessors(args, {
+          resolveDir: dirname(filename),
           contents: outCodeParts.join('\n'),
           loader: 'js',
           watchFiles: [filename],
@@ -518,6 +525,7 @@ interface VuePluginMiddleData {
   descriptor: compiler.SFCDescriptor;
   templateCompileOptions: compiler.SFCTemplateCompileOptions | false;
   id: string;
+  filename: string;
   scopeId: string | null;
   toESBuildError: ReturnType<typeof makeToEsBuildErrorFunction>;
   hasJSX: boolean;

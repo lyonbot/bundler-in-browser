@@ -1,5 +1,6 @@
 import { Buffer } from "buffer";
-import esbuild from "esbuild-wasm";
+import type esbuild from "esbuild-wasm";
+import { version as esbuildVersion } from "esbuild-wasm";
 import { EventEmitter } from "./EventEmitter.js";
 import { MiniNPM } from "./MiniNPM.js";
 import { getDefaultBuildConfiguration, type BuildConfiguration } from "./configuration.js";
@@ -7,6 +8,7 @@ import { UserCodeEsbuildHelper } from "./esbuild-user.js";
 import { VendorCodeEsbuildHelper, type VendorBundleConfig } from "./esbuild-vendor.js";
 import { makeParallelTaskMgr } from "./parallelTask.js";
 import { cloneDeep, separateNpmPackageNameVersion, stripQuery, toSortedArray, wrapCommonJS } from './utils/index.js';
+import { createEsbuildWorker, type EsbuildProxy } from "./worker/esbuild-main.js";
 
 export namespace BundlerInBrowser {
   export type BuildConfiguration = import('./configuration.js').BuildConfiguration;
@@ -79,7 +81,7 @@ export namespace BundlerInBrowser {
     stat(path: string, cb: (err: any, stats: any) => void): void;
     lstat(path: string, cb: (err: any, stats: any) => void): void;
     fstat(fd: number, cb: (err: any, stats: any) => void): void;
-    open(path: string, flags: string, mode: number, cb: (err: any, fd: number) => void): void;
+    open(path: string, flags: any, mode: number, cb: (err: any, fd: number) => void): void;
     close(fd: number, cb: (err: any) => void): void;
     read(fd: number, buffer: any, offset: number, length: number, position: number | null, cb: (err: any, bytesRead: number, buffer: Buffer) => void): void;
     write(fd: number, buffer: any, offset: number, length: number, position: number | null, cb: (err: any, written: number, buffer: Buffer) => void): void;
@@ -116,6 +118,9 @@ export class BundlerInBrowser {
     // no plugins
     sourcemap: 'linked',
     sourcesContent: false,
+
+    absWorkingDir: '/',
+    preserveSymlinks: false,
   }
 
   initialized: Promise<void> | false = false;
@@ -124,7 +129,8 @@ export class BundlerInBrowser {
     await this.initialized;
   }
 
-  static readonly esbuildVersion = esbuild.version;
+  static readonly esbuildVersion = esbuildVersion;
+  esbuild!: EsbuildProxy;
 
   async initialize(opt: {
     /** esbuild wasm url. defaults to `` ({ version }) => `https://cdn.jsdelivr.net/npm/esbuild-wasm@${version}/esbuild.wasm` `` */
@@ -132,13 +138,18 @@ export class BundlerInBrowser {
   } = {}) {
     if (!this.initialized) {
       let wasmURL = opt.esbuildWasmURL;
-      if (typeof wasmURL === 'function') wasmURL = wasmURL({ version: esbuild.version });
-      if (!wasmURL) wasmURL = `https://cdn.jsdelivr.net/npm/esbuild-wasm@${esbuild.version}/esbuild.wasm`;
+      if (typeof wasmURL === 'function') wasmURL = wasmURL({ version: esbuildVersion });
+      if (!wasmURL) wasmURL = `https://cdn.jsdelivr.net/npm/esbuild-wasm@${esbuildVersion}/esbuild.wasm`;
 
-      this.initialized = esbuild.initialize({
-        wasmURL,
-        // wasmModule: await WebAssembly.compileStreaming(fetch('/node_modules/esbuild-wasm/esbuild.wasm')),
-      });
+      this.initialized = Promise.resolve().then(async () => {
+        const worker = await createEsbuildWorker({
+          fs: this.fs,
+          initOptions: {
+            wasmURL: wasmURL.toString(),
+          }
+        })
+        this.esbuild = worker.esbuild;
+      })
     }
     await this.initialized;
   }

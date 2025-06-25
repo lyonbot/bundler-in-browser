@@ -36,6 +36,7 @@ export class VendorCodeEsbuildHelper extends EsbuildHelper<VendorBundleResult> {
         })
         build.onLoad({ filter: /./, namespace: 'vendor-entry' }, (args) => {
           if (args.path === vendorSourceFile) return {
+            resolveDir: '/',
             contents: this.generateSourceContent(),
             loader: 'js'
           };

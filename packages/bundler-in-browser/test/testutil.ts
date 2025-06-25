@@ -115,14 +115,24 @@ export async function createBundlerForTest(files: Record<string, string>) {
     fs.writeFileSync(file, files[file])
   }
 
-  const bundler = new BundlerInBrowser(fs);
-  bundler.initialized = initializeEsbuild();
-  // await bundler.initialize(); 
+  const bundler = new BundlerInBrowser(fs as any);
+  patchBundlerInit(bundler);
+
+  await bundler.initialize();
 
   return { fs, bundler }
 }
 
-export function initializeEsbuild() {
+export async function patchBundlerInit(bundler: BundlerInBrowser) {
+  bundler.initialize = () => {
+    return bundler.initialized ||= (async () => {
+      await initializeEsbuild();
+      bundler.esbuild = esbuild as any;
+    })()
+  }
+}
+
+export async function initializeEsbuild() {
   return _esbuildInitializePromise ||= esbuild.initialize({});
 }
 

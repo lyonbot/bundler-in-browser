@@ -42,6 +42,7 @@ export class UserCodeEsbuildHelper extends EsbuildHelper<BuildUserCodeResult> {
 
     const opts: esbuild.BuildOptions = {
       ...esbuildBaseOptions,
+      resolveExtensions: config.extensions,
       entryPoints: [config.entrypoint || guessEntrypoint(fs)],
       outdir: "/user",
       plugins: [

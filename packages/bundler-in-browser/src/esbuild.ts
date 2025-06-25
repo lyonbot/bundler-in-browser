@@ -1,6 +1,6 @@
-import esbuild from "esbuild-wasm";
+import type esbuild from "esbuild-wasm";
 import { dirname } from "path";
-import { create as createResolver } from 'enhanced-resolve'
+// import { create as createResolver } from 'enhanced-resolve'
 import type { BundlerInBrowser } from "./BundlerInBrowser.js";
 import type { BuildConfiguration } from "./configuration.js";
 import { escapeRegExp, stripQuery } from "./utils/string.js";
@@ -33,13 +33,13 @@ export abstract class EsbuildHelper<TResult> {
   protected async baseBuild(): Promise<BaseBuildResult> {
     this.beforeBuild();
     const options = this.makeEsbuildOptions();
-    const output = await esbuild.build({
+    const output = await this.bundler.esbuild.build({
       ...options,
       write: false,
     });
 
-    let js = output.outputFiles.find(x => x.path.endsWith('.js'))?.text || '';
-    let css = output.outputFiles.find(x => x.path.endsWith('.css'))?.text || '';
+    let js = output.outputFiles?.find(x => x.path.endsWith('.js'))?.text || '';
+    let css = output.outputFiles?.find(x => x.path.endsWith('.css'))?.text || '';
 
     return {
       js,
@@ -125,14 +125,14 @@ export function createESBuildResolver(bundler: BundlerInBrowser, options: {
 } = {}): esbuild.Plugin {
   const { fs, config: { extensions } } = bundler;
 
-  const invokeResolver = createResolver({
-    fileSystem: fs as any,
-    extensions: extensions.slice(),
-    mainFields: ['browser', 'module', 'main'],
-    aliasFields: ['browser'],
-    conditionNames: ['browser', 'import', 'require'],
-    symlinks: true,
-  })
+  // const invokeResolver = createResolver({
+  //   fileSystem: fs as any,
+  //   extensions: extensions.slice(),
+  //   mainFields: ['browser', 'module', 'main'],
+  //   aliasFields: ['browser'],
+  //   conditionNames: ['browser', 'import', 'require'],
+  //   symlinks: true,
+  // })
 
   return ({
     name: "resolve",
@@ -142,15 +142,15 @@ export function createESBuildResolver(bundler: BundlerInBrowser, options: {
         let suffix = args.path.slice(fullPath.length);
         if (/^(https?:)\/\/|^data:/.test(fullPath)) return { external: true, path: fullPath, suffix }; // URL is external
 
-        return await new Promise((resolve, reject) => {
-          invokeResolver(args.resolveDir || dirname(args.importer), fullPath, (err, res) => {
-            if (err) return reject(err);
-            if (!res) return reject(new Error(`Cannot resolve ${fullPath}`));
+        // return await new Promise((resolve, reject) => {
+        //   invokeResolver(args.resolveDir || dirname(args.importer), fullPath, (err, res) => {
+        //     if (err) return reject(err);
+        //     if (!res) return reject(new Error(`Cannot resolve ${fullPath}`));
 
-            if (options.onResolved) options.onResolved(args, res);
-            resolve({ path: res, suffix });
-          })
-        });
+        //     if (options.onResolved) options.onResolved(args, res);
+        //     resolve({ path: res, suffix });
+        //   })
+        // });
       });
     },
   });
