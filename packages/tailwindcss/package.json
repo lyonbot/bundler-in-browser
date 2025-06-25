@@ -49,14 +49,13 @@
   "peerDependencies": {
     "bundler-in-browser": "*"
   },
-  "dependencies": {},
   "devDependencies": {
     "@bundler-in-browser/common": "workspace:^0.1.0",
     "@mhsdesign/jit-browser-tailwindcss": "^0.4.2",
     "autoprefixer": "^10.4.21",
-    "bundler-in-browser": "workspace:*",
-    "esbuild-wasm": "^0.25.1",
-    "postcss": "^8.0.0",
+    "bundler-in-browser": "workspace:^0.2.0",
+    "esbuild-wasm": "^0.25.5",
+    "postcss": "^8.5.6",
     "tailwindcss": "~3.4.17",
     "typescript": "catalog:",
     "vite": "catalog:",
