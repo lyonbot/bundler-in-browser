@@ -14,7 +14,7 @@
     "esbuild-wasm": "^0.25.5",
     "memfs": "^4.17.2",
     "path-browserify": "^1.0.1",
-    "streamx": "^2.22.0",
+    "streamx": "^2.22.1",
     "util": "^0.12.5"
   },
   "devDependencies": {

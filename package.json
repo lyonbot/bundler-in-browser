@@ -17,9 +17,9 @@
   "author": "lyonbot <lyonbot@gmail.com>",
   "license": "MIT",
   "devDependencies": {
-    "@changesets/cli": "^2.29.4",
+    "@changesets/cli": "^2.29.5",
+    "@vitest/coverage-v8": "^3.2.4",
     "oxlint": "^0.17.0",
-    "vitest": "catalog:",
-    "@vitest/coverage-v8": "^3.2.3"
+    "vitest": "catalog:"
   }
 }
