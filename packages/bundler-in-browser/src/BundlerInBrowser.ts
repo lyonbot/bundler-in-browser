@@ -74,8 +74,19 @@ export namespace BundlerInBrowser {
 
     readFile(path: string, cb: (err: any, data: any) => void): void;
     readFile(path: string, encoding: 'utf-8' | string | any, cb: (err: any, data: any) => void): void;
+
+    // for esbuild-wasm
     stat(path: string, cb: (err: any, stats: any) => void): void;
+    lstat(path: string, cb: (err: any, stats: any) => void): void;
+    fstat(fd: number, cb: (err: any, stats: any) => void): void;
+    open(path: string, flags: string, mode: number, cb: (err: any, fd: number) => void): void;
+    close(fd: number, cb: (err: any) => void): void;
+    read(fd: number, buffer: any, offset: number, length: number, position: number | null, cb: (err: any, bytesRead: number, buffer: Buffer) => void): void;
+    write(fd: number, buffer: any, offset: number, length: number, position: number | null, cb: (err: any, written: number, buffer: Buffer) => void): void;
+    readdir(path: string, cb: (err: any, files: string[]) => void): void;
     readlink(path: string, cb: (err: any, linkString: any) => void): void;
+
+    // for enhanced-resolve
     readlink(path: string, options: any, cb: (err: any, linkString: any) => void): void;
   }
 }
@@ -103,6 +114,8 @@ export class BundlerInBrowser {
     // no entryPoints
     // no outdir
     // no plugins
+    sourcemap: 'linked',
+    sourcesContent: false,
   }
 
   initialized: Promise<void> | false = false;

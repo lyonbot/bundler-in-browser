@@ -1,0 +1,23 @@
+{
+  "name": "experiment-esbuild-wasm-calls",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "vite --open"
+  },
+  "keywords": [],
+  "author": "",
+  "packageManager": "pnpm@10.12.1",
+  "dependencies": {
+    "buffer": "^6.0.3",
+    "esbuild-wasm": "^0.25.5",
+    "memfs": "^4.17.2",
+    "path-browserify": "^1.0.1",
+    "streamx": "^2.22.0",
+    "util": "^0.12.5"
+  },
+  "devDependencies": {
+    "vite": "catalog:"
+  }
+}
