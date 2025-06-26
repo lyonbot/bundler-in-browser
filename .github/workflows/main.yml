@@ -26,11 +26,20 @@ jobs:
         run: |
           pnpm run test
 
+      - name: Make site
+        run: |
+          rm -rf site || true
+          mkdir -p site/examples
+          for d in examples/*; do
+            cp -r $d/dist site/examples/$(basename $d)
+          done
+          mv site/examples/main/* site/
+
       - name: Upload static files as artifact
         id: deployment
         uses: actions/upload-pages-artifact@v3 # or specific "vX.X.X" version tag for this action
         with:
-          path: examples/main/dist/
+          path: site/
 
   # Deployment job
   deploy:
