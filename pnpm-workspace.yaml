@@ -1,7 +1,7 @@
 packages:
   - packages/*
   - private-experiment/*
-  - example
+  - examples/*
 
 catalog:
   typescript: ^5.8.3

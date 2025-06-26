@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "for internal use and bundled. won't be published",
   "private": true,
+  "type": "module",
   "dependencies": {
     "path-browserify": "^1.0.1"
   }

@@ -30,7 +30,7 @@ jobs:
         id: deployment
         uses: actions/upload-pages-artifact@v3 # or specific "vX.X.X" version tag for this action
         with:
-          path: example/dist/
+          path: examples/main/dist/
 
   # Deployment job
   deploy:

@@ -9,7 +9,7 @@ const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
 export default defineConfig({
   define: {
     'process.env.NODE_ENV': '"development"',
-    // 'process.platform': '"browser"',
+    'process.platform': '"browser"',
   },
   resolve: {
     alias: {
