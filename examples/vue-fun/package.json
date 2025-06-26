@@ -1,0 +1,39 @@
+{
+    "name": "example-vue-fun",
+    "private": true,
+    "version": "0.0.1",
+    "type": "module",
+    "scripts": {
+        "dev": "vite --open ./index.html",
+        "build": "vite build"
+    },
+    "dependencies": {
+        "@bundler-in-browser/tailwindcss": "workspace:^0.1.3",
+        "@volar/language-service": "^2.4.15",
+        "@volar/monaco": "^2.4.15",
+        "@vue/compiler-core": "^3.5.17",
+        "@vue/language-service": "3.0.0-alpha.8",
+        "@vue/repl": "^4.6.1",
+        "@zenfs/core": "^2.3.2",
+        "buffer": "^6.0.3",
+        "bundler-in-browser": "workspace:^0.2.0",
+        "dayjs": "^1.11.13",
+        "esbuild-wasm": "^0.25.5",
+        "monaco-editor-core": "^0.52.2",
+        "path-browserify": "^1.0.1",
+        "pinia": "^3.0.3",
+        "typescript": "catalog:",
+        "vscode-uri": "^3.1.0",
+        "vue": "^3.5.17",
+        "yon-utils": "^0.1.25"
+    },
+    "devDependencies": {
+        "@shikijs/monaco": "^3.7.0",
+        "@vitejs/plugin-vue": "^5.2.4",
+        "@vitejs/plugin-vue-jsx": "^4.2.0",
+        "@vue/tsconfig": "^0.7.0",
+        "shiki": "^3.7.0",
+        "vite": "^6.3.5",
+        "vite-plugin-vue-devtools": "^7.7.7"
+    }
+}

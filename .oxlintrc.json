@@ -4,7 +4,8 @@
   },
   "rules": {
     "eqeqeq": "warn",
-    "no-eval": "off"
+    "no-eval": "off",
+    "import/default": "off", // yet buggy for `?worker` url
   },
   "overrides": [
     {

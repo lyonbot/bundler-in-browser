@@ -53,7 +53,7 @@ export class UserCodeEsbuildHelper extends EsbuildHelper<BuildUserCodeResult> {
           onResolved: (args, target) => {
             let arr = this.userFileDependents.get(target);
             if (!arr) this.userFileDependents.set(target, arr = []);
-            arr.push(args.importer);
+            if (args.importer) arr.push(args.importer);
           }
         }),
         createESBuildNormalLoader(bundler),
@@ -76,6 +76,7 @@ export class UserCodeEsbuildHelper extends EsbuildHelper<BuildUserCodeResult> {
       ...baseResult,
       npmRequired: Array.from(this.npmRequired),
       vendorImportedPaths: new Map(this.vendorImportedPaths),
+      externalsPaths: new Map(this.externalsPaths),
       userFileDependents: new Map(this.userFileDependents),
     }
   }
@@ -86,11 +87,20 @@ export interface BuildUserCodeResult extends BaseBuildResult {
   npmRequired: string[];
 
   /** 
-   * imported vendor paths and their dependents 
+   * imported vendor paths and their dependents (not including externals)
    * 
    *  eg: { "lodash/debounce": ["/src/1.js", "/src/2.js"] }
+   * 
+   * @see externalsPaths
    */
   vendorImportedPaths: Map<string, string[]>;
+
+  /**
+   * imported external paths and their dependents
+   * 
+   * @see vendorImportedPaths
+   */
+  externalsPaths: Map<string, string[]>;
 
   /** 
    * user file's dependents 
