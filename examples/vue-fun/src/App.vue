@@ -2,13 +2,13 @@
   <h1>Hello Vite!</h1>
   <p>Loading: {{ worker.loading }}</p>
   <MonacoEditor v-model="code" language="vue" :options="editorOptions" />
-  <pre>{{ code }}</pre>
+  <pre>{{ files }}</pre>
 </template>
 
 <script setup lang="ts">
 import { useBundlerController } from "./store/bundler";
 
-const { worker } = useBundlerController();
+const { worker, files } = useBundlerController();
 
 import MonacoEditor from "@/monaco/MonacoEditor.vue";
 import { ref, watch } from "vue";
