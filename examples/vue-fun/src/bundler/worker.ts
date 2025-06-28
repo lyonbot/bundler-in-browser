@@ -7,6 +7,7 @@ import { BundlerInBrowser, installSassPlugin, installVuePlugin } from "bundler-i
 import installTailwindPlugin from "@bundler-in-browser/tailwindcss";
 import { fs } from "@zenfs/core";
 import { vueInspectorNodeTransform } from "./vueNodeTransform";
+import { dirname, join } from "@zenfs/core/path.js";
 
 const bundler = new BundlerInBrowser(fs as any);
 
@@ -36,7 +37,7 @@ async function init() {
 
   log('init done');
 
-  await writeFile('/index.js', `
+  await writeFile('/src/index.js', `
     import { createApp } from 'vue'
     import App from './App.vue'
 
@@ -52,18 +53,31 @@ async function compile() {
 // #region file access
 
 async function readdir(path: string, opt?: { recursive?: boolean }) {
-  const prefixLength = path.length + (path.endsWith('/') ? 0 : 1)
-  const files = await fs.promises.readdir(path, { withFileTypes: true, recursive: opt?.recursive });
-  return files.map(file => {
-    let dir = file.parentPath.slice(prefixLength)
-    if (dir && !dir.endsWith('/')) dir += '/'
-    return ({
-      name: file.name,
-      path: dir + file.name,
-      isDirectory: file.isDirectory(),
-      isSymbolicLink: file.isSymbolicLink(),
-    });
-  })
+  const result: Array<{
+    name: string,
+    path: string,
+    isDirectory: boolean,
+    isSymbolicLink: boolean,
+  }> = []
+
+  const recursive = !!opt?.recursive
+  const scanQueue = [path]
+  while (scanQueue.length) {
+    const iDir = scanQueue.shift()!
+    const files = await fs.promises.readdir(iDir, { withFileTypes: true });
+    for (const file of files) {
+      const iFullPath = join(iDir, file.name)
+      if (recursive && file.isDirectory()) scanQueue.push(iFullPath)
+      result.push({
+        name: file.name,
+        path: iFullPath,
+        isDirectory: file.isDirectory(),
+        isSymbolicLink: file.isSymbolicLink(),
+      })
+    }
+  }
+
+  return result
 }
 
 async function readFile(path: string): Promise<string | undefined>
@@ -86,6 +100,9 @@ async function stat(path: string) {
 }
 
 async function writeFile(path: string, content: string | Uint8Array) {
+  const dir = dirname(path)
+  await fs.promises.mkdir(dir, { recursive: true })
+
   await markFileAsModified(path)
   await fs.promises.writeFile(path, content);
 }
@@ -113,6 +130,7 @@ const modifiedFiles = new Map<string, { content: Uint8Array | undefined, sinceTi
 const markFileAsModified = async (path: string) => {
   if (!modifiedFiles.has(path)) {
     modifiedFiles.set(path, { content: await readFile(path, true), sinceTime: Date.now() })
+    postMessage({ type: 'worker-file-modified', path })
   }
 }
 const getModifiedList = async () => {

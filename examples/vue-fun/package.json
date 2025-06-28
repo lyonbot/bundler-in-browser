@@ -19,6 +19,7 @@
         "bundler-in-browser": "workspace:^0.2.0",
         "dayjs": "^1.11.13",
         "esbuild-wasm": "^0.25.5",
+        "lodash-es": "^4.17.21",
         "monaco-editor-core": "^0.52.2",
         "path-browserify": "^1.0.1",
         "pinia": "^3.0.3",
@@ -29,6 +30,7 @@
     },
     "devDependencies": {
         "@shikijs/monaco": "^3.7.0",
+        "@types/lodash-es": "^4.17.12",
         "@vitejs/plugin-vue": "^5.2.4",
         "@vitejs/plugin-vue-jsx": "^4.2.0",
         "@vue/tsconfig": "^0.7.0",

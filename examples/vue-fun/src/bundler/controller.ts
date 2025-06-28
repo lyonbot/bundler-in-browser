@@ -1,11 +1,17 @@
 import { createWorkerDispatcher } from "yon-utils";
 import { shallowReactive, type ShallowReactive } from "vue";
 import type { VueFunWorkerMethods } from "./worker";
+import { EventEmitter } from "bundler-in-browser";
+
+type Events = {
+  'file-modified': (path: string) => void
+}
 
 export type BundlerController = {
   worker: Worker;
   api: VueFunWorkerMethods;
   logs: ShallowReactive<Array<WorkerLogItem>>;
+  events: EventEmitter<Events>
   clearLogs: () => void;
 };
 
@@ -27,14 +33,20 @@ export const getBundlerController = () => {
       worker.postMessage({ type: 'worker-command', payload }, transferable);
     });
 
+    const events = new EventEmitter<Events>()
     const logs = shallowReactive([] as Array<WorkerLogItem>);
     worker.onmessage = (e) => {
-      if (e.data?.type === 'worker-log') {
+      const data = e.data, type = data?.type
+      if (!data) return
+
+      if (type === 'worker-log') {
         logs.push({
           time: Date.now(),
-          message: e.data.message,
-          data: e.data.data,
+          message: data.message,
+          data: data.data,
         })
+      } else if (type === 'worker-file-modified') {
+        events.emit('file-modified', data.path)
       }
     }
     worker.onerror = (e) => reject(new Error(e.message));
@@ -42,6 +54,7 @@ export const getBundlerController = () => {
       worker,
       api,
       logs,
+      events,
       clearLogs: () => { logs.length = 0 }
     }));
   });
