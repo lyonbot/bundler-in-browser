@@ -24,15 +24,18 @@ self.onmessage = () => {
 		))
 		const fs: FileSystem = {
 			async stat(uri) {
-				if (uri.path.startsWith('/node_modules/')) return await npmFs.stat(uri)
+				if (uri.path.startsWith('/node_modules'))
+					return await npmFs.stat(uri)
 				return await bundlerFs.stat(uri.path)
 			},
 			async readFile(uri) {
-				if (uri.path.startsWith('/node_modules/')) return await npmFs.readFile(uri)
+				if (uri.path.startsWith('/node_modules/'))
+					return await npmFs.readFile(uri)
 				return await bundlerFs.readFile(uri.path)
 			},
 			async readDirectory(uri) {
-				if (uri.path.startsWith('/node_modules/')) return npmFs.readDirectory(uri)
+				if (uri.path.startsWith('/node_modules/'))
+					return npmFs.readDirectory(uri)
 				const ans = await bundlerFs.readDirectory(uri.path)
 				if (uri.path === '/' && !ans.some(([name]) => name === 'node_modules')) {
 					ans.push(['node_modules', 2 satisfies FileType.Directory])
@@ -57,13 +60,15 @@ self.onmessage = () => {
 			jsx: ts.JsxEmit.Preserve,
 			module: ts.ModuleKind.ESNext,
 			moduleResolution: ts.ModuleResolutionKind.Node10,
+			target: ts.ScriptTarget.ESNext,
+			allowSyntheticDefaultImports: true,
 		};
 
 		const vueCompilerOptions: VueCompilerOptions = ({
-			...getVueDefaultCompilerOptions()
+			...getVueDefaultCompilerOptions(),
 		})
 
-		return createTypeScriptWorkerLanguageService({
+		const service = createTypeScriptWorkerLanguageService({
 			workerContext: ctx,
 			env,
 			typescript: ts,
@@ -95,5 +100,7 @@ self.onmessage = () => {
 			// 	...createTypeScriptServicePlugin(ts),
 			// ],
 		});
+
+		return service
 	});
 };

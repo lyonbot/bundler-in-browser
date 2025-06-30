@@ -1,4 +1,4 @@
-import { type RootNode, type SourceLocation, type TemplateChildNode } from '@vue/compiler-core'
+import { type AttributeNode, type RootNode, type SourceLocation, type TemplateChildNode } from '@vue/compiler-core'
 
 const EXCLUDE_TAG = ['template', 'script', 'style']
 const ATTR_KEY = 'data-v-inspector'
@@ -14,23 +14,24 @@ const getFakeLoc = (): SourceLocation => ({
  * 
  * use this in `templateCompilerOptions.nodeTransforms`
  */
-export const vueInspectorNodeTransform = (node: TemplateChildNode | RootNode) => {
-  const filename = 'Foo.vue'
+export const vueInspectorNodeTransform = (node: TemplateChildNode | RootNode, context: any) => {
+  const filename = context.filename
 
   if (node.type === 1) {
     if ((node.tagType === 0 || node.tagType === 1) && !EXCLUDE_TAG.includes(node.tag)) {
       const { line, column } = node.loc.start
+      const { line: endLine, column: endColumn } = node.loc.end
       node.props.push({
         type: 6,
         name: ATTR_KEY,
         value: {
           type: 2,
-          content: `${filename}:${line}:${column}`,
+          content: `${filename}:${line}:${column}-${endLine}:${endColumn}`,
           loc: getFakeLoc(),
         },
         loc: getFakeLoc(),
         nameLoc: getFakeLoc(),
-      })
+      } satisfies AttributeNode)
     }
   }
 }

@@ -22,7 +22,7 @@
         "path-browserify": "^1.0.1",
         "react": "^19.1.0",
         "react-dom": "^19.1.0",
-        "yon-utils": "^0.1.24"
+        "yon-utils": "^0.1.26"
     },
     "devDependencies": {
         "vite": "^6.3.5"

@@ -3,7 +3,7 @@ import { ref, shallowReactive } from "vue";
 import { useBundlerController } from "./bundler";
 import { debounce } from "lodash-es";
 
-export const useEditorStore = defineStore('editor', () => {
+export const useFileEditorStore = defineStore('editor', () => {
     const bundler = useBundlerController();
     /** files under `/`, excluding `/node_modules` */
     const files = shallowReactive<FileTreeNode[]>([])
@@ -42,6 +42,14 @@ export const useEditorStore = defineStore('editor', () => {
         }
     }
 
+    function closeFile(path: string) {
+        const index = openedFiles.value.indexOf(path);
+        if (index !== -1) openedFiles.value.splice(index, 1);
+        if (path === activeFilePath.value) {
+            activeFilePath.value = openedFiles.value[index] || openedFiles.value[index - 1] || ''
+        }
+    }
+
     return {
         activeFilePath,
         openedFiles,
@@ -49,6 +57,15 @@ export const useEditorStore = defineStore('editor', () => {
         syncFiles,
 
         openFile,
+        closeFile,
+        getFileContent: async (path: string) => {
+            await bundler.readyPromise
+            return bundler.worker.api.readFile(path)
+        },
+        updateFileContent: async (path: string, content: string) => {
+            await bundler.readyPromise
+            return bundler.worker.api.writeFile(path, content)
+        },
     }
 })
 

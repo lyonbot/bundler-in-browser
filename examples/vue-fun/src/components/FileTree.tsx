@@ -1,10 +1,10 @@
-import { useEditorStore, type FileTreeNode } from '@/store/editor';
+import { useFileEditorStore, type FileTreeNode } from '@/store/fileEditor';
 import { computed, defineComponent, reactive, watch, type PropType } from 'vue';
 
 export default defineComponent({
   name: 'FileTree',
   setup() {
-    const store = useEditorStore();
+    const store = useFileEditorStore();
     const ctx: Ctx = reactive({
       expandedFiles: new Set<string>()
     });
@@ -42,7 +42,7 @@ const TreeNode = defineComponent({
     ctx: { type: Object as PropType<Ctx>, required: true }
   },
   setup(props) {
-    const store = useEditorStore();
+    const store = useFileEditorStore();
     const path = computed(() => props.item.path);
     const isActive = computed(() => store.activeFilePath === path.value);
     const isExpanded = computed({
@@ -57,7 +57,7 @@ const TreeNode = defineComponent({
     const isDirectory = computed(() => !!props.item.children);
 
     return () => (
-      <li class="relative">
+      <li class="relative" style={`list-style-type: ${ isDirectory.value ? (isExpanded.value ? '"[-]"' : '"[+]"') : "disc"}`}>
         <div
           onClick={() => {
             if (isDirectory.value) {

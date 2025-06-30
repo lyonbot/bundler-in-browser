@@ -1,3 +1,8 @@
+//
+// this runs in main thread
+// it may create a worker and provide the api controller for main thread
+//
+
 import { createWorkerDispatcher } from "yon-utils";
 import { shallowReactive, type ShallowReactive } from "vue";
 import type { VueFunWorkerMethods } from "./worker";
@@ -5,6 +10,7 @@ import { EventEmitter } from "bundler-in-browser";
 
 type Events = {
   'file-modified': (path: string) => void
+  'compiling-progress': (message: string) => void
 }
 
 export type BundlerController = {
@@ -47,6 +53,8 @@ export const getBundlerController = () => {
         })
       } else if (type === 'worker-file-modified') {
         events.emit('file-modified', data.path)
+      } else if (type === 'worker-compiling-progress') {
+        events.emit('compiling-progress', data.message)
       }
     }
     worker.onerror = (e) => reject(new Error(e.message));

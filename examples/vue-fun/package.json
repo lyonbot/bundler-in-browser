@@ -14,6 +14,7 @@
         "@vue/compiler-core": "^3.5.17",
         "@vue/language-service": "3.0.0-alpha.8",
         "@vue/repl": "^4.6.1",
+        "@vueuse/core": "^13.4.0",
         "@zenfs/core": "^2.3.2",
         "buffer": "^6.0.3",
         "bundler-in-browser": "workspace:^0.2.0",
@@ -23,10 +24,12 @@
         "monaco-editor-core": "^0.52.2",
         "path-browserify": "^1.0.1",
         "pinia": "^3.0.3",
+        "tdesign-icons-vue-next": "^0.3.6",
+        "tdesign-vue-next": "^1.14.1",
         "typescript": "catalog:",
         "vscode-uri": "^3.1.0",
         "vue": "^3.5.17",
-        "yon-utils": "^0.1.25"
+        "yon-utils": "^0.1.26"
     },
     "devDependencies": {
         "@shikijs/monaco": "^3.7.0",

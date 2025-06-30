@@ -1,6 +1,8 @@
 ///<reference lib="webworker" />
-
+//
 // this run in worker thread
+// the worker is created by ./controller.ts
+//
 
 import { createWorkerHandler } from "yon-utils"
 import { BundlerInBrowser, installSassPlugin, installVuePlugin } from "bundler-in-browser";
@@ -8,16 +10,28 @@ import installTailwindPlugin from "@bundler-in-browser/tailwindcss";
 import { fs } from "@zenfs/core";
 import { vueInspectorNodeTransform } from "./vueNodeTransform";
 import { dirname, join } from "@zenfs/core/path.js";
+import { throttle } from "lodash-es";
 
 const bundler = new BundlerInBrowser(fs as any);
 
 async function init() {
   await bundler.initialize({})
 
+  bundler.events.on('npm:progress', ev => sendCompileProgress(`npm: ${ev.stage} (${ev.current}/${ev.total})`))
+  bundler.events.on('npm:install:done', () => sendCompileProgress(`npm: install done`))
+  bundler.events.on('npm:install:error', (errors) => {
+    console.error(`npm install error!`, errors)
+    sendCompileProgress(`npm: install error! ${errors}`)
+  })
+  bundler.events.on('build:start', () => sendCompileProgress(`build: start`))
+  bundler.events.on('build:usercode', () => sendCompileProgress(`build: usercode done`))
+  bundler.events.on('build:vendor', () => sendCompileProgress(`build: vendor done`))
+
   bundler.config.externals.push('vue')
 
   await installTailwindPlugin(bundler, {
     rootDir: "/src",
+    pattern: /\.(css|scss|html|vue|jsx?|tsx?|md)$/,   // defaults
     tailwindConfig: {
       corePlugins: {
         // preflight: false, // disable Tailwind's reset
@@ -36,18 +50,16 @@ async function init() {
   });
 
   log('init done');
-
-  await writeFile('/src/index.js', `
-    import { createApp } from 'vue'
-    import App from './App.vue'
-
-    createApp(App).mount('#root')
-    `);
 }
 
+const sendCompileProgress = throttle((message: string) => postMessage({ type: 'worker-compiling-progress', message }), 100)
 async function compile() {
-  const out = await bundler.build()
-  return out
+  try {
+    const out = await bundler.build()
+    return out
+  } finally {
+    sendCompileProgress.cancel()
+  }
 }
 
 // #region file access

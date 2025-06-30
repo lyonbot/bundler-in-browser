@@ -17,12 +17,12 @@ export abstract class EsbuildHelper<TResult> {
   }
 
   /** all  */
-  externalsPaths: Map<string, string[]> = new Map(); // { "lodash/debounce": ["/src/1.js", "/src/2.js"] }
+  externalsPaths: Map<string, Set<string>> = new Map(); // { "lodash/debounce": ["/src/1.js", "/src/2.js"] }
   protected getExternalPlugin() {
     return createESBuildExternalsCollector(this.bundler.config.externals, (imported, importer) => {
       let arr = this.externalsPaths.get(imported);
-      if (!arr) this.externalsPaths.set(imported, arr = []);
-      arr.push(importer);
+      if (!arr) this.externalsPaths.set(imported, arr = new Set());
+      arr.add(importer);
     });
   }
 
@@ -120,9 +120,7 @@ export function createESBuildNormalLoader(bundler: BundlerInBrowser): esbuild.Pl
   });
 }
 
-export function createESBuildResolver(bundler: BundlerInBrowser, options: {
-  onResolved?: (args: esbuild.OnResolveArgs, target: string) => void
-} = {}): esbuild.Plugin {
+export function createESBuildResolver(bundler: BundlerInBrowser): esbuild.Plugin {
   const { fs, config: { extensions } } = bundler;
 
   const invokeResolver = createResolver({
@@ -147,7 +145,6 @@ export function createESBuildResolver(bundler: BundlerInBrowser, options: {
             if (err) return reject(err);
             if (!res) return reject(new Error(`Cannot resolve ${fullPath}`));
 
-            if (options.onResolved) options.onResolved(args, res);
             resolve({ path: res, suffix });
           })
         });

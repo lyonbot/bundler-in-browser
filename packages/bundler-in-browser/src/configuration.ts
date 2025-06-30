@@ -55,18 +55,24 @@ export function getDefaultBuildConfiguration() {
     /** 
      * your custom `define` function name. defaults to `"define"` 
      * 
-     * Note: the function must have `amd` flag ( will check `define.amd == true` )
+     * only affect the concatenated result (`concatUserCodeAndVendors()` or `build()`)
+     * 
+     * Note: your `define` function must comply with `define.amd == true`
      */
     amdDefine: 'define',
 
     /** 
      * in UMD mode, module will expose at `self[umdGlobalName]` (usually self is `window`) 
+     * 
+     * only affect the concatenated result (`concatUserCodeAndVendors()` or `build()`)
      */
     umdGlobalName: '',
 
     /** 
      * in UMD mode, your mock *require(id)* function. set to null to disable.
      * 
+     * only affect the concatenated result (`concatUserCodeAndVendors()` or `build()`)
+     *
      * this shall be a expression like `"window.myRequire"`, pointing to a function, which looks like `(id) => { return ... }`
      * 
      * @note you won't need this if `external` not set.

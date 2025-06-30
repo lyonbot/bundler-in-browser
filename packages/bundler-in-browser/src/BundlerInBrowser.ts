@@ -8,11 +8,12 @@ import { VendorCodeEsbuildHelper, type VendorBundleConfig } from "./esbuild-vend
 import { makeParallelTaskMgr } from "./parallelTask.js";
 import { cloneDeep, separateNpmPackageNameVersion, stripQuery, toSortedArray, wrapCommonJS } from './utils/index.js';
 
-export namespace BundlerInBrowser {
-  export type BuildConfiguration = import('./configuration.js').BuildConfiguration;
-  export type BuildUserCodeResult = import('./esbuild-user.js').BuildUserCodeResult;
-  export type VendorBundleResult = import('./esbuild-vendor.js').VendorBundleResult;
+import type { BuildUserCodeResult } from './esbuild-user.js'
+import type { VendorBundleResult } from './esbuild-vendor.js'
 
+export type { BuildConfiguration, BuildUserCodeResult, VendorBundleResult }
+
+export namespace BundlerInBrowser {
   export interface ConcatCodeResult {
     /** entry content, in **UMD format**, containing user code and vendor code */
     js: string;
@@ -48,8 +49,8 @@ export namespace BundlerInBrowser {
   export interface Events {
     'initialized': () => void;
     'build:start': () => void;
-    'build:usercode': (result: BundlerInBrowser.BuildUserCodeResult) => void;
-    'build:vendor': (result: BundlerInBrowser.VendorBundleResult) => void;
+    'build:usercode': (result: BuildUserCodeResult) => void;
+    'build:vendor': (result: VendorBundleResult) => void;
     'npm:progress': (event: MiniNPM.ProgressEvent) => void;
     'npm:packagejson:update': (newPackageJson: any) => void;
     'npm:install:done': () => void;
@@ -147,7 +148,7 @@ export class BundlerInBrowser {
   vendorPlugins: esbuild.Plugin[] = [] // only for vendor code
   commonPlugins: esbuild.Plugin[] = [] // works for both user and vendor, applied after userCodePlugins / vendorPlugins
 
-  lastVendorBundle: undefined | BundlerInBrowser.VendorBundleResult
+  lastVendorBundle: undefined | VendorBundleResult
 
   constructor(fs: BundlerInBrowser.IFs) {
     this.fs = fs;
@@ -228,8 +229,8 @@ export class BundlerInBrowser {
    * generate a UMD format code, which contains user code and vendor code.
    */
   concatUserCodeAndVendors(
-    userCode: BundlerInBrowser.BuildUserCodeResult,
-    dlls: BundlerInBrowser.VendorBundleResult[],
+    userCode: BuildUserCodeResult,
+    dlls: VendorBundleResult[],
   ): BundlerInBrowser.ConcatCodeResult {
     const { amdDefine, umdGlobalName, umdGlobalRequire } = this.config
     dlls = dlls.filter(Boolean);
@@ -303,10 +304,10 @@ export class BundlerInBrowser {
 
     // make vendorHelper for later use
     const vendorHelper = await this.createVendorBuildHelper({
-      exportPaths: toSortedArray(userCode.vendorImportedPaths.keys()),
+      exportPaths: toSortedArray(userCode.vendorDependents.keys()),
     });
     const isVendorReusable = lastVendorBundle?.hash === vendorHelper.hash;
-    let vendorBundle: BundlerInBrowser.VendorBundleResult;
+    let vendorBundle: VendorBundleResult;
 
     // install npm packages and bundle vendor code
     // if vendor bundle is reusable, we can skip npm install and vendor bundling
@@ -354,10 +355,10 @@ export class BundlerInBrowser {
   /**
    * load vendor bundle, which can be reloaded next time by `loadVendorBundle()`.
    */
-  loadVendorBundle(bundle: BundlerInBrowser.VendorBundleResult | undefined | null) {
+  loadVendorBundle(bundle: VendorBundleResult | undefined | null) {
     if (!bundle) return;
 
-    const b: BundlerInBrowser.VendorBundleResult = {
+    const b: VendorBundleResult = {
       hash: bundle.hash || '',
       js: bundle.js || '',
       css: bundle.css || '',

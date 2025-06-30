@@ -16,6 +16,7 @@ createHighlighter({
     'vue',
     'javascript',
     'typescript',
+    'yaml',
     'json',
     'css',
     'scss'
@@ -23,12 +24,13 @@ createHighlighter({
 }).then((highlighter) => {
 
   // 首先注册你需要的语言的 IDs
-  // monaco.languages.register({ id: 'vue' })       // will be registered by setup-volar
-  monaco.languages.register({ id: 'typescript' })
-  monaco.languages.register({ id: 'javascript' })
-  monaco.languages.register({ id: 'json' })
-  monaco.languages.register({ id: 'css' })
-  monaco.languages.register({ id: 'scss' })
+  monaco.languages.register({ id: 'vue', extensions: ['.vue'] })
+  monaco.languages.register({ id: 'typescript', extensions: ['.ts'] })
+  monaco.languages.register({ id: 'javascript', extensions: ['.js'] })
+  monaco.languages.register({ id: 'yaml', extensions: ['.yaml'] })
+  monaco.languages.register({ id: 'json', extensions: ['.json'] })
+  monaco.languages.register({ id: 'css', extensions: ['.css'] })
+  monaco.languages.register({ id: 'scss', extensions: ['.scss'] })
 
   // 注册 Shiki 主题，并为 Monaco 提供语法高亮
   shikiToMonaco(highlighter, monaco)
