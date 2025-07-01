@@ -19,7 +19,9 @@ export default defineConfig({
   },
   plugins: [dts({ rollupTypes: true })],
   build: {
+    emptyOutDir: true,
     minify: !IS_DEVELOPMENT,
+    sourcemap: IS_DEVELOPMENT,
     rollupOptions: {
       external: [
         ...Object.keys(packageJSON.dependencies || {}),

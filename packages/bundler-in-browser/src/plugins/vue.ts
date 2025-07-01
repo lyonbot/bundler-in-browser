@@ -20,21 +20,93 @@ export interface InstallVuePluginOptions {
    * options for template compiler, including ParserOptions & TransformOptions & CodegenOptions
    * 
    * for example, use `nodeTransforms` to add custom attrs
+   * 
+   * you can pass a partial object, or a `function (initialOptions, sfcDescriptor): newOptions`
    */
-  templateCompilerOptions?: Partial<compiler.SFCTemplateCompileOptions['compilerOptions']>;
+  templateCompilerOptions?: OptionsPatcher<compiler.CompilerOptions, [descriptor: compiler.SFCDescriptor]>;
 
   /**
-   * inject extra code to sfc runtime, before `export default ___vue_component__`
+   * options for `compileScript()`
+   * 
+   * for example, use `nodeTransforms` to add custom attrs
+   * 
+   * you can pass a partial object, or a `function (initialOptions, sfcDescriptor): newOptions`
+   */
+  scriptCompilerOptions?: OptionsPatcher<compiler.SFCScriptCompileOptions, [descriptor: compiler.SFCDescriptor]>;
+
+  /**
+   * inject extra code to sfc runtime, after script & render, before final `export default ___vue_component__`
+   * 
+   * @see patchCompiledScript
    */
   injectSFCRuntime?: (ctx: {
     filePath: string,
+    /** parsed SFC descriptor */
+    descriptor: compiler.SFCDescriptor,
     /** the exported identifier of SFC. usually is `__vue_component__` */
     COMP_IDENTIFIER: string,
     /** only valid when scoped style exists */
     scopeId?: string,
     /** only valid when hmr is enabled. usually equals to `__vue_component__.__hmrId` */
     hmrId?: string
-  }) => string | Promise<string>;
+  }) => MaybePromise<string | null | void>;
+
+  /**
+   * inject extra code after the compiled script, before render function
+   * 
+   * or patch the `compiledScript.content` directly.
+   * 
+   * @see injectSFCRuntime
+   * @see patchTemplateCompileResults
+   */
+  patchCompiledScript?: (ctx: {
+    filePath: string,
+    /** parsed SFC descriptor */
+    descriptor: compiler.SFCDescriptor,
+    /** compiled script block. contains useful info like `bindings`, `imports`, ast etc. */
+    compiledScript: compiler.SFCScriptBlock,
+    /** the exported identifier of SFC. usually is `__vue_component__` */
+    COMP_IDENTIFIER: string,
+    /** only valid when scoped style exists */
+    scopeId?: string,
+    /** only valid when hmr is enabled. usually equals to `__vue_component__.__hmrId` */
+    hmrId?: string
+  }) => MaybePromise<void>;
+
+  /**
+   * patch the compiled template script.
+   * 
+   * @remarks 
+   * - not work if `inlineTemplate` is `true` and `<script setup>` exists.
+   * - you can modify `templateCompileResults.code` and `templateCompileResults.map` to modify the final template code.
+   * 
+   * @see injectSFCRuntime
+   * @see patchCompiledScript
+   */
+  patchTemplateCompileResults?: (ctx: {
+    filePath: string,
+    /** parsed SFC descriptor */
+    descriptor: compiler.SFCDescriptor,
+    /** 
+     * the compiled template results 
+     * 
+     * may be modified by `patchTemplateCompileResults`
+     */
+    templateCompileResults: compiler.SFCTemplateCompileResults
+    /** 
+     * compiled script block. contains useful info like `bindings`, `imports`, ast etc.
+     * 
+     * - Don't modify, won't work.
+     * - Might be undefined, if no `<script>` in SFC.
+     */
+    compiledScript?: Readonly<compiler.SFCScriptBlock>,
+    /** the exported identifier of SFC. usually is `__vue_component__` */
+    COMP_IDENTIFIER: string,
+    /** only valid when scoped style exists */
+    scopeId?: string,
+    /** only valid when hmr is enabled. usually equals to `__vue_component__.__hmrId` */
+    hmrId?: string
+  }) => MaybePromise<void>;
 
   /** whether inject HMR related code `__VUE_HMR_RUNTIME__.createRecord(hmrId, sfcMain)` */
   hmr?: boolean;
@@ -161,10 +233,13 @@ const defaultOptions: Required<InstallVuePluginOptions> = {
   enableHydrationMismatchDetails: false,
   isProd: false,
   inlineTemplate: false,
-  templateCompilerOptions: {},
+  templateCompilerOptions: null,
+  scriptCompilerOptions: null,
   hmr: false,
   hmrId: (filePath) => filePath,
   injectSFCRuntime: () => '',
+  patchCompiledScript: () => void 0,
+  patchTemplateCompileResults: () => void 0,
 }
 
 export default function installVuePlugin(bundler: BundlerInBrowser, opts: InstallVuePluginOptions = {}) {
@@ -262,7 +337,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         // Note: shall after `sfc-script` loader
         // because it might need to know `bindingMetadata` from `scriptSetup`
         const vuePluginData = args.pluginData.vue as VuePluginMiddleData;
-        const { bindingMetadata, templateCompileOptions, toESBuildError } = vuePluginData;
+        const { compiledScriptPromise, templateCompileOptions, toESBuildError } = vuePluginData;
 
         if (!templateCompileOptions) {
           return {
@@ -273,15 +348,24 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         }
 
         // `bindingMetadata` from `scriptSetup` is now available
-        templateCompileOptions.compilerOptions!.bindingMetadata = bindingMetadata;
+        templateCompileOptions.compilerOptions!.bindingMetadata = (await compiledScriptPromise)?.bindings;
 
-        const { code: rawCode, errors } = compiler.compileTemplate(templateCompileOptions);
-        if (errors.length > 0) return { errors: errors.map(e => toESBuildError(e)) };
+        const ans = compiler.compileTemplate(templateCompileOptions);
+        if (ans.errors.length > 0) return { errors: ans.errors.map(e => toESBuildError(e)) };
 
         // rawCode contains `export (function|const) (render|ssrRender)`
+        await instance.options.patchTemplateCompileResults?.({
+          filePath: vuePluginData.descriptor.filename,
+          descriptor: vuePluginData.descriptor,
+          templateCompileResults: ans,
+          COMP_IDENTIFIER,
+          scopeId: vuePluginData.scopeId,
+          hmrId: vuePluginData.hmrId,
+          compiledScript: await compiledScriptPromise
+        })
 
         return await bundler.pluginUtils.applyPostProcessors(args, {
-          contents: rawCode,
+          contents: ans.code,
           loader: 'js',
           pluginData: {
             ...args.pluginData,
@@ -291,23 +375,28 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
 
       build.onLoad({ filter: /./, namespace: "sfc-script" }, async (args) => {
         const vuePluginData = args.pluginData.vue as VuePluginMiddleData;
-        const { descriptor, templateCompileOptions, id, hasTS, hasJSX, toESBuildError } = vuePluginData;
+        const { descriptor, templateCompileOptions, id, hasTS, hasJSX, scopeId, hmrId, toESBuildError, provideCompiledScript } = vuePluginData;
 
         const filename = descriptor.filename;
         let compiledScript: ReturnType<typeof compiler.compileScript>;
         try {
-          compiledScript = compiler.compileScript(descriptor, {
-            inlineTemplate: instance.options.inlineTemplate,
-            id,
-            isProd,
-            genDefaultAs: COMP_IDENTIFIER,
-            fs: {
-              fileExists: (file) => bundler.fs.existsSync(file),
-              readFile: (file) => { try { return bundler.fs.readFileSync(file, 'utf8') as string; } catch { } },
-              realpath: (file) => bundler.fs.realpathSync(file, { encoding: 'utf8' }) as string,
+          const options = await invokeOptionsPatcher(
+            instance.options.scriptCompilerOptions,
+            {
+              inlineTemplate: instance.options.inlineTemplate,
+              id,
+              isProd,
+              genDefaultAs: COMP_IDENTIFIER,
+              fs: {
+                fileExists: (file) => bundler.fs.existsSync(file),
+                readFile: (file) => { try { return bundler.fs.readFileSync(file, 'utf8') as string; } catch { } },
+                realpath: (file) => bundler.fs.realpathSync(file, { encoding: 'utf8' }) as string,
+              },
+              templateOptions: templateCompileOptions || undefined,
             },
-            templateOptions: templateCompileOptions || undefined,
-          });
+            descriptor
+          );
+          compiledScript = compiler.compileScript(descriptor, options);
         } catch (e) {
           if ('loc' in (e as any)) {
             // vue-compiler doesn't fix Babel's loc information.try to find out the real loc
@@ -337,18 +426,32 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
             loc.column += offsetPos!.column
             loc.index += offsetPos!.offset
           }
+          provideCompiledScript(new Error(`failed to compile <script>: ${e}`), undefined)
           return { errors: [toESBuildError(e as SyntaxError)] }
         }
 
         const errors = compiledScript.warnings?.map(e => toESBuildError(e)) || [];
         if (errors.length > 0) return { errors };
 
+        // bundler allows injecting code for compiled <script>
+        // and beware user MAY modify `compiledScript` in this hook
+        await instance.options.patchCompiledScript?.({
+          filePath: filename,
+          descriptor,
+          compiledScript,
+          COMP_IDENTIFIER,
+          scopeId,
+          hmrId,
+        })
+
+        // finally concat code
         let codePrefix = '';
         let codeSuffix = '\nexport default ' + COMP_IDENTIFIER;
         if (hasJSX) {
           codePrefix += '/** @jsx vueH */\n/** @jsxFrag vueFragment */\nimport { h as vueH, Fragment as vueFragment } from "vue";\n';
         }
 
+        // add source map
         const map = { ...compiledScript.map }
         if (map.mappings) {
           map.mappings = ';'.repeat(countChar(codePrefix, '\n')) + map.mappings
@@ -356,7 +459,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         }
 
         // for `sfc-template` loader
-        vuePluginData.bindingMetadata = compiledScript.bindings;
+        provideCompiledScript(null, compiledScript);
 
         let esbuildLoader: esbuild.Loader = 'js';
         if (hasTS) esbuildLoader = 'ts';
@@ -376,6 +479,8 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         const encPath = args.path.replace(/\\/g, "\\\\");
         const code = fs.readFileSync(filename, 'utf8') as string;
 
+        // prepare common infos
+
         const id = stringHash(filename).toString(36);
         const { errors, descriptor } = compiler.parse(code, {
           filename: filename,
@@ -391,6 +496,19 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           errors: errors.map(e => toESBuildError(e))
         };
 
+        // sfc-template might need to know `bindingMetadata` from `scriptSetup`
+
+        let provideCompiledScript!: VuePluginMiddleData['provideCompiledScript']
+        let compiledScriptPromise: VuePluginMiddleData['compiledScriptPromise'] = new Promise((res, rej) => {
+          provideCompiledScript = (err, data) => {
+            if (err) rej(err)
+            else res(data!)
+          }
+        })
+
+        // ----------------------------------------------
+        // prepare infos for template, script and style
+
         const hasScopedStyle = descriptor.styles.some(s => s.scoped);
         const scopeId = hasScopedStyle ? `data-v-${id}` : null;
 
@@ -400,6 +518,21 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         const expressionPlugins: compiler.CompilerOptions['expressionPlugins'] = [];
         if (hasJSX) expressionPlugins.push('jsx');
         if (hasTS) expressionPlugins.push('typescript');
+
+        // ----------------------------------------------
+        // entry file
+        //
+        // the final entry file (xxx.vue) will be look like this:
+        //
+        // import __vue_component__ from "/src/xxx.vue?type=script";
+        // import __render from "/src/xxx.vue?type=template";
+        // import "/src/xxx.vue?type=style&index=0";
+        //
+        // __vue_component__.render = __render;
+        // __vue_component__.__hmrId = "xxx.vue";
+        // __vue_component__.__scopeId = "data-v-xxxxxx";
+        // export default __vue_component__
+        //
 
         let outCodeParts: string[] = [];
 
@@ -413,6 +546,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           outCodeParts.push(
             `const ${COMP_IDENTIFIER} = {};`
           )
+          provideCompiledScript(null, undefined); // no script block, so no compiledScript
         }
 
         // styles
@@ -433,15 +567,18 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           // transformAssetUrls
           // preprocessLang
           // preprocessOptions
-          compilerOptions: {
-            ...instance.options.templateCompilerOptions,
-            filename,
-            // bindingMetadata: descriptor.scriptSetup?.bindings, // yet no data, will be filled later.
-            scopeId,
-            expressionPlugins,
-            // sourceMap: true,
-            hmr: !!instance.options.hmr,
-          },
+          compilerOptions: await invokeOptionsPatcher(
+            instance.options.templateCompilerOptions,
+            {
+              filename,
+              // bindingMetadata: descriptor.scriptSetup?.bindings, // yet no data, will be filled later.
+              scopeId,
+              expressionPlugins,
+              // sourceMap: true,
+              hmr: !!instance.options.hmr,
+            },
+            descriptor
+          ),
         }
         if (templateCompileOptions && (!instance.options.inlineTemplate || !descriptor.scriptSetup)) {
           outCodeParts.push(
@@ -470,6 +607,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
 
         // inject sfc runtime
         const extraInject = await instance.options.injectSFCRuntime({
+          descriptor,
           COMP_IDENTIFIER,
           filePath: filename,
           scopeId: scopeId || undefined,
@@ -481,14 +619,20 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           `export default ${COMP_IDENTIFIER}`
         )
 
+        // ----------------------------------------------
+        // emit entry file, and the imports will be handled by other loaders
+
         const vuePluginMiddleData: VuePluginMiddleData = {
           descriptor,
           templateCompileOptions,
           id,
-          scopeId,
+          scopeId: scopeId || undefined,
+          hmrId: hmrId || undefined,
           hasJSX: !!hasJSX,
           hasTS: !!hasTS,
           toESBuildError,
+          compiledScriptPromise,
+          provideCompiledScript,
         }
 
         return await bundler.pluginUtils.applyPostProcessors(args, {
@@ -518,12 +662,16 @@ interface VuePluginMiddleData {
   descriptor: compiler.SFCDescriptor;
   templateCompileOptions: compiler.SFCTemplateCompileOptions | false;
   id: string;
-  scopeId: string | null;
+  scopeId: string | undefined;
+  hmrId: string | undefined;
   toESBuildError: ReturnType<typeof makeToEsBuildErrorFunction>;
   hasJSX: boolean;
   hasTS: boolean;
 
-  bindingMetadata?: compiler.BindingMetadata; // populated by `scriptSetup`
+  compiledScriptPromise: Promise<compiler.SFCScriptBlock | undefined>;
+  provideCompiledScript: { // invoked by `scriptSetup`
+    (err: Error | null | undefined, data: compiler.SFCScriptBlock | undefined): void
+  }
 }
 
 const getPreprocessCustomRequireWithSass = memoAsync(async () => {
@@ -549,3 +697,11 @@ const getPreprocessCustomRequireWithSass = memoAsync(async () => {
 
   return preprocessCustomRequire as (id: string) => any
 })
+
+export type MaybePromise<T> = T | Promise<T>;
+export type OptionsPatcher<T extends object, ARGS extends any[]> = ((initial: T, ...args: ARGS) => T | Promise<T>) | null | undefined | Partial<T>;
+async function invokeOptionsPatcher<T extends object, ARGS extends any[]>(userCfg: OptionsPatcher<T, ARGS>, initial: T, ...args: ARGS) {
+  if (!userCfg) return initial;
+  if (typeof userCfg === 'function') return await userCfg(initial, ...args);
+  return { ...initial, ...userCfg };
+}

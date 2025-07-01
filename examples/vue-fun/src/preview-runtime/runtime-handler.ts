@@ -41,7 +41,12 @@ class BuiltChunkMounter {
 
   revision = vue.ref(0)
 
-  /** once the chunk is loaded, this will be resolved with the exports */
+  /** 
+   * once the chunk is loaded, this will be resolved with the exports
+   * 
+   * if `__updateBuiltChunk()` starts updating chunk, it will become a new pending Promise, 
+   * then resolve with newest exports
+   */
   loadPromise = makePromise<any>()
   lastExports = {}
 
@@ -78,7 +83,7 @@ class BuiltChunkMounter {
     }
 
     if (chunk.js !== prev?.js) {
-      const prelude = `self.__updateBuiltinChunk(${JSON.stringify(name)}, (require, module, exports) => { `
+      const prelude = `self.__updateBuiltChunk(${JSON.stringify(name)}, (require, module, exports) => { `
 
       const oldScript = this.script
       const newScript = document.createElement('script')
@@ -108,7 +113,7 @@ function createBuiltChunkManager() {
     "@runtime/require": fakeRequire,
   };
 
-  (window as any).__updateBuiltinChunk = (name: string, factory: (require: any, module: any, exports: any) => any) => {
+  (window as any).__updateBuiltChunk = (name: string, factory: (require: any, module: any, exports: any) => any) => {
 
     const el = document.currentScript as HTMLScriptElement;
     const updatingPromise = el?.[$updatingPromise];
@@ -131,7 +136,7 @@ function createBuiltChunkManager() {
 
     const vendorExports = chunkMounters.vendor.loadPromise.value
     const deps = vendorExports.deps;
-    if (id in deps) return deps[id]
+    if (id in deps) return deps[id]();
 
     throw new Error(`Unknown require id: ${id}`)
   }

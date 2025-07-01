@@ -21,7 +21,8 @@ export default defineConfig({
     format: 'es',
   },
   optimizeDeps: {
-    include: ['monaco-editor-core']
+    include: ['monaco-editor-core'],
+    exclude: ['@bundler-in-browser/*', 'bundler-in-browser']
   },
   resolve: {
     alias: {

@@ -41,7 +41,7 @@ flowchart LR
 
 ## tech details
 
-### run in runtime
+### run modules in runtime
 
 the runtime accept `BuiltChunk`s:
 
@@ -52,22 +52,36 @@ the runtime accept `BuiltChunk`s:
 
 a `BuiltChunk` may update (eg. user updated the code), hence i made a `BuiltChunkManager` to load and update them in [preview-runtime/runtime-handler.ts](./src/preview-runtime/runtime-handler.ts)
 
-esbuild output cjs by default, which relies on global volatile `require` and `module`. to fix them, the built code will be wrapped within `window.__updateBuiltinChunk(name, function (require, module, exports) {`
+esbuild output cjs by default, which relies on global volatile `require` and `module`. to fix them, the built code will be wrapped within `window.__updateBuiltChunk(name, function (require, module, exports) {`
 
 > why squeeze the prelude into single line? because it will remain sourcemap reusable without modification! only first line of bundled code is affected, and in most cases user code remain safe.
 
 the mechanism is kinda different from regular AMD like requirejs. in the "user" chunk, `require()` shall pull dep modules from "vendor" chunk, or platform built-in modules like `vue`. and that's why you can find a `fakeRequire` in [preview-runtime/runtime-handler.ts](./src/preview-runtime/runtime-handler.ts)
 
-there is no remote loading, so I simply made a shabby `define` function, rather than use completed `requirejs`. 
+there is no remote loading, so I simply made a shabby `define` function, rather than use completed `requirejs`.
 
 > actually it's because requirejs cannot overwrite existing module with same id. in this app, when vendor chunk change, the user chunk must be modified too, so it's not a problem.
 
 1. get chunk js, css, marking the `BuiltChunkMounter` as updating, with a new Promise `updatingPromise`
 2. update chunk HTMLScriptElement and HTMLStyleElement
-3. the script will execute and call `window.__updateBuiltinChunk(name, factory)`
+3. the script will execute and call `window.__updateBuiltChunk(name, factory)`
 4. (if not vendor chunk), wait for vendor's updatingPromise
 5. invoke factory, then resolve chunk's `updatingPromise` with the exports. the promise is retrieved from `currentScript[$updatingPromise]`
 6. once promise resolved, all dependents will be notified, like the component host.
+
+### add source location to vue components
+
+basically borrowed idea and impl from [vue-inspector](https://github.com/webfansplz/vite-plugin-vue-inspector/blob/main/packages/core/src/compiler/template.ts)
+
+- when bundler-in-browser compiles `<template>` of vue sfc:
+
+  1. use `nodeTransforms` to inject attributes to each node.
+  2. use `patchTemplateCompileResults` to patch `createElementVNode` and other functions, to hide attributes from DOM.
+  3. in runtime, use `getInspectorDataFromElement(el)` to retrieve the data like `/src/App.vue:3:5-5:10`
+
+- when bundler-in-browser compiles `<script>` of vue sfc:
+
+  1. (TODO: support JSX syntax)
 
 ### store of editor
 

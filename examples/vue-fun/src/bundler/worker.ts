@@ -4,11 +4,11 @@
 // the worker is created by ./controller.ts
 //
 
-import { createWorkerHandler } from "yon-utils"
-import { BundlerInBrowser, installSassPlugin, installVuePlugin } from "bundler-in-browser";
+import { createWorkerHandler, noop } from "yon-utils"
+import { BundlerInBrowser, installSassPlugin, installVuePlugin, type VuePluginInstance } from "bundler-in-browser";
 import installTailwindPlugin from "@bundler-in-browser/tailwindcss";
 import { fs } from "@zenfs/core";
-import { vueInspectorNodeTransform } from "./vueNodeTransform";
+import { vueInspectorNodeTransform, vuePatchScriptForInspector } from "../vue-inspector/for-bundler";
 import { dirname, join } from "@zenfs/core/path.js";
 import { throttle } from "lodash-es";
 
@@ -39,17 +39,45 @@ async function init() {
     },
   });
   await installSassPlugin(bundler);
-  await installVuePlugin(bundler, {
+  vuePluginInstance = await installVuePlugin(bundler, {
     enableProdDevTools: true,
-    templateCompilerOptions: {
-      // Cool Part
-      nodeTransforms: [
-        vueInspectorNodeTransform,
-      ]
-    }
+    templateCompilerOptions: {},
   });
 
+  setProdMode(false)
   log('init done');
+}
+
+let vuePluginInstance!: VuePluginInstance
+let isProd = false
+async function setProdMode(_isProd: boolean) {
+  isProd = _isProd;
+  if (isProd) {
+    // use default Vue compiler options
+    vuePluginInstance.options.templateCompilerOptions = null
+    vuePluginInstance.options.patchCompiledScript = noop
+    vuePluginInstance.options.patchTemplateCompileResults = noop
+  } else {
+    vuePluginInstance.options.templateCompilerOptions = {
+      nodeTransforms: [
+        vueInspectorNodeTransform, // add `data-v-inspector` attribute to all Vue elements
+      ],
+    }
+    vuePluginInstance.options.patchCompiledScript = ({ compiledScript }) => {
+      const out = vuePatchScriptForInspector(compiledScript.content, compiledScript.map?.mappings)
+      if (out) {
+        compiledScript.content = out[0]
+        if (compiledScript.map) compiledScript.map.mappings = out[1]
+      }
+    }
+    vuePluginInstance.options.patchTemplateCompileResults = ({ templateCompileResults }) => {
+      const out = vuePatchScriptForInspector(templateCompileResults.code, templateCompileResults.map?.mappings)
+      if (out) {
+        templateCompileResults.code = out[0]
+        if (templateCompileResults.map) templateCompileResults.map.mappings = out[1]
+      }
+    }
+  }
 }
 
 const sendCompileProgress = throttle((message: string) => postMessage({ type: 'worker-compiling-progress', message }), 100)
