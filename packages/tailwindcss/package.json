@@ -24,9 +24,9 @@
       "import": "./dist/index.js"
     },
     "./package.json": "./package.json",
-    "./*": {
-      "default": "./goods/*"
-    }
+    "./*.css": "./goods/*",
+    "./*.js": "./goods/*",
+    "./*": "./goods/*.js"
   },
   "scripts": {
     "test": "vitest",

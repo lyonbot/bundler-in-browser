@@ -29,7 +29,7 @@ import { modKey } from "yon-utils";
 const code = ref(`<template>
   <h1>{{ message }}</h1>
   <p>Count is: {{ count }}</p>
-  <button class="bg-blue-500 text-white rounded" @click="count++">Increment</button>
+  <button class="bg-emerald-500 text-white rounded-xl p-8 py-4" @click="count++">Increment</button>
 </template>
 
 <script setup lang="ts">

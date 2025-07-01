@@ -32,7 +32,7 @@ export default function installTailwindPlugin(bundler: BundlerInBrowser, options
   if (!rootDir) rootDir = '/';
   if (!rootDir.startsWith('/')) throw new Error('rootDir must start with /');
 
-  const processor = postcss();
+  let processor: postcss.Processor;
   bundler.config.postProcessors.push({
     name: "tailwindcss",
     test: /\.(s[ac]ss|css)$/i,
@@ -57,6 +57,7 @@ export default function installTailwindPlugin(bundler: BundlerInBrowser, options
     name: "tailwindcss",
     setup(build) {
       const fs = bundler.fs;
+      processor = postcss();
 
       build.onStart(async () => {
         await readyPromise;

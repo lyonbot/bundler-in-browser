@@ -34,7 +34,7 @@ async function init() {
     pattern: /\.(css|scss|html|vue|jsx?|tsx?|md)$/,   // defaults
     tailwindConfig: {
       corePlugins: {
-        // preflight: false, // disable Tailwind's reset
+        preflight: false, // disable Tailwind's reset
       },
     },
   });

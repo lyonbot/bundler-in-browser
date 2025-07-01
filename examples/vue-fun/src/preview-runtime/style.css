@@ -1,0 +1,8 @@
+@import '@unocss/reset/tailwind-compat.css';
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+}

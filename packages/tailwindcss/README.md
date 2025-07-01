@@ -34,7 +34,7 @@ await installTailwindPlugin(bundler, {
   // Your tailwind configuration
   tailwindConfig: {
     corePlugins: {
-      preflight: false, // Example: disable Tailwind's reset
+      preflight: false, // Example: disable Tailwind CSS Reset. 👇 see caveats below.
     },
   },
 });
@@ -58,11 +58,29 @@ import "./main.css";
 
 ## Caveats
 
-### Use tailwind.config.js
+### preflight (CSS Reset)
 
-For convenience, you can set `tailwindConfig: "/tailwind.config.js"`, but actually it's dangerous because we use `eval` to load it. And it can't load plugins.
+If you set `preflight: false` in `tailwindConfig`, you may need to import CSS Reset manually.
 
-It's recommended to pass an `tailwindConfig` object directly instead, and you can use plugins.
+- **suggestion1**: use [@unocss/reset](https://unocss.dev/guide/style-reset#tailwind) instead
+
+  ```js
+  // based on Tailwind reset, minus the background color override for buttons
+  // to avoid conflicts with UI frameworks.
+  import "@unocss/reset/tailwind-compat.css";
+  ```
+
+- **suggestion2**: use tailwind's original preflight
+
+  ⚠️ You need PostCSS + TailwindCSS to process [functions](https://v3.tailwindcss.com/docs/functions-and-directives#theme) like `theme('borderColor.DEFAULT', currentColor)`
+
+  ```js
+  // as css style (be processed by PostCSS)
+  import "@bundler-in-browser/tailwindcss/preflight.css";
+
+  // or, as js string (you shall process functions by yourself)
+  import { preflight } from "@bundler-in-browser/tailwindcss";
+  ```
 
 ### TailwindCSS Plugins
 
@@ -107,6 +125,12 @@ module.exports = {
   },
 };
 ```
+
+### Use tailwind.config.js
+
+For convenience, you can set `tailwindConfig: "/tailwind.config.js"`, but actually it's dangerous because we use `eval` to load it. And it can't load plugins.
+
+It's recommended to pass an `tailwindConfig` object directly instead, which supports plugins.
 
 ## Configuration Options
 

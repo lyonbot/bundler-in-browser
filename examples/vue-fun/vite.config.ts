@@ -29,4 +29,12 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     }
   },
+  build: {
+    rollupOptions: {
+      input: {
+        index: fileURLToPath(new URL('./index.html', import.meta.url)),
+        previewer: fileURLToPath(new URL('./previewer.html', import.meta.url)),
+      }
+    }
+  }
 })
