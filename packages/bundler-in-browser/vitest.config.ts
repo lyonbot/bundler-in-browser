@@ -1,10 +1,10 @@
 import { defineConfig } from 'vitest/config';
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { commonResolveAliases } from '@bundler-in-browser/common/resolve-aliases';
-import { createRequire } from 'module';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const require = createRequire(import.meta.url);
-
+const basedir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   test: {
@@ -13,7 +13,8 @@ export default defineConfig({
         resolve: {
           alias: {
             ...commonResolveAliases,
-            'path': require.resolve('./test/__patch__/path.mjs'),  // <------
+            vue$: 'vue/dist/vue.esm-bundler.js',
+            'path': path.resolve(basedir, './test/__patch__/path.mjs'),  // <------
             'stream': 'streamx',
           }
         },
@@ -29,6 +30,7 @@ export default defineConfig({
               { browser: 'chromium' },
             ]
           },
+          includeTaskLocation: true,
           include: ['test/e2e/**/*.test.ts'],
         }
       },
@@ -41,6 +43,7 @@ export default defineConfig({
           name: { label: 'unit' },
           environment: 'node',
           globals: true,
+          includeTaskLocation: true,
           include: ['test/**/*.test.ts'],
           exclude: ['test/e2e/**/*.test.ts'],
         }

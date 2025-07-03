@@ -1,5 +1,5 @@
 import type { BundlerInBrowser } from './BundlerInBrowser.js';
-import type { InstallVuePluginOptions, VuePluginInstance } from './plugins/vue.js';
+import type { InstallVuePluginOptions, VuePluginInstance, OptionsPatcher, VueSfcCacheItem } from './plugins/vue.js';
 
 import * as npm from './npm/index.js';
 export { npm };
@@ -20,4 +20,4 @@ export async function installSassPlugin(bundler: BundlerInBrowser) {
 export async function installVuePlugin(bundler: BundlerInBrowser, opts?: InstallVuePluginOptions): Promise<VuePluginInstance> {
   return (await import('./plugins/vue.js')).default(bundler, opts);
 }
-export { type VuePluginInstance }
+export { type VuePluginInstance, type OptionsPatcher, type VueSfcCacheItem }

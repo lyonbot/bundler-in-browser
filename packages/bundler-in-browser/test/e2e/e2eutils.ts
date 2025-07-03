@@ -5,6 +5,7 @@ export function insertStyle(css: string) {
   style.textContent = css;
   document.head.appendChild(style);
   insertedElements.add(style);
+  return style;
 }
 
 export function insertElement(el: Element) {

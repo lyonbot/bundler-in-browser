@@ -568,7 +568,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
   }
 
   instance.plugin = plugin;
-  bundler.commonPlugins.push(plugin);
+  bundler.userCodePlugins.push(plugin); // vendor? not care for now.
 
   return instance;
 }
