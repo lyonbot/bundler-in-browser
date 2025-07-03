@@ -59,18 +59,13 @@ export interface InstallVuePluginOptions {
    * @see injectSFCRuntime
    * @see patchTemplateCompileResults
    */
-  patchCompiledScript?: (ctx: {
-    filePath: string,
-    /** parsed SFC descriptor */
-    descriptor: compiler.SFCDescriptor,
-    /** compiled script block. contains useful info like `bindings`, `imports`, ast etc. */
-    compiledScript: compiler.SFCScriptBlock,
-    /** the exported identifier of SFC. usually is `__vue_component__` */
-    COMP_IDENTIFIER: string,
-    /** only valid when scoped style exists */
-    scopeId?: string,
-    /** only valid when hmr is enabled. usually equals to `__vue_component__.__hmrId` */
-    hmrId?: string
+  patchCompiledScript?: (ctx: VueSfcCacheItem & {
+    /**
+     * compiled script block. contains useful info like `bindings`, `imports`, ast etc.
+     * 
+     * in `patchCompiledScript`, you can modify `compiledScript.content` and `compiledScript.map` to modify the final script code.
+     */
+    compiledScript: compiler.SFCScriptBlock
   }) => MaybePromise<void>;
 
   /**
@@ -83,29 +78,13 @@ export interface InstallVuePluginOptions {
    * @see injectSFCRuntime
    * @see patchCompiledScript
    */
-  patchTemplateCompileResults?: (ctx: {
-    filePath: string,
-    /** parsed SFC descriptor */
-    descriptor: compiler.SFCDescriptor,
+  patchTemplateCompileResults?: (ctx: VueSfcCacheItem & {
     /** 
      * the compiled template results 
      * 
      * may be modified by `patchTemplateCompileResults`
      */
     templateCompileResults: compiler.SFCTemplateCompileResults
-    /** 
-     * compiled script block. contains useful info like `bindings`, `imports`, ast etc.
-     * 
-     * - Don't modify, won't work.
-     * - Might be undefined, if no `<script>` in SFC.
-     */
-    compiledScript?: Readonly<compiler.SFCScriptBlock>,
-    /** the exported identifier of SFC. usually is `__vue_component__` */
-    COMP_IDENTIFIER: string,
-    /** only valid when scoped style exists */
-    scopeId?: string,
-    /** only valid when hmr is enabled. usually equals to `__vue_component__.__hmrId` */
-    hmrId?: string
   }) => MaybePromise<void>;
 
   /** whether inject HMR related code `__VUE_HMR_RUNTIME__.createRecord(hmrId, sfcMain)` */
@@ -123,6 +102,34 @@ const COMP_IDENTIFIER = '__vue_component__';
 export interface VuePluginInstance {
   options: Required<InstallVuePluginOptions>;
   plugin: esbuild.Plugin;
+  /** 
+   * contains all .vue sfc file information.
+   * 
+   * cleared when build start, and updated for each .vue file.
+   * 
+   * you can access this after built
+   */
+  sfcCache: Map<string, VueSfcCacheItem>;
+}
+
+export interface VueSfcCacheItem {
+  filePath: string,
+  /** the exported identifier of SFC. usually is `__vue_component__` */
+  COMP_IDENTIFIER: string,
+  /** parsed SFC descriptor */
+  descriptor: compiler.SFCDescriptor,
+  sfcPraseErrors: compiler.SFCParseResult['errors'],
+  /** 
+   * compiled script block. contains useful info like `bindings`, `imports`, ast etc.
+   * 
+   * - Don't modify, won't work.
+   * - Might be undefined, if no `<script>` in SFC.
+   */
+  compiledScript?: compiler.SFCScriptBlock,
+  /** only valid when hmr is enabled. usually equals to `__vue_component__.__hmrId` */
+  hmrId?: string,
+  /** only valid when scoped style exists */
+  scopeId?: string,
 }
 
 const defaultOptions: Required<InstallVuePluginOptions> = {
@@ -147,6 +154,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
       ...opts,
     },
     plugin: null as unknown as esbuild.Plugin, // assign later
+    sfcCache: new Map(),
   };
 
   const plugin: esbuild.Plugin = {
@@ -160,6 +168,10 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         "__VUE_PROD_HYDRATION_MISMATCH_DETAILS__": opts.enableHydrationMismatchDetails ? "true" : "false",
         ...build.initialOptions.define,
       }
+
+      build.onStart(() => {
+        instance.sfcCache.clear();
+      })
 
       // Resolve main ".vue" import
       build.onResolve({ filter: /\.vue/ }, async (args) => {
@@ -235,7 +247,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         // Note: shall after `sfc-script` loader
         // because it might need to know `bindingMetadata` from `scriptSetup`
         const vuePluginData = args.pluginData.vue as VuePluginMiddleData;
-        const { compiledScriptPromise, templateCompileOptions, toESBuildError } = vuePluginData;
+        const { compiledScriptPromise, templateCompileOptions, sfcCacheItem, toESBuildError } = vuePluginData;
 
         if (!templateCompileOptions) {
           return {
@@ -253,13 +265,9 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
 
         // rawCode contains `export (function|const) (render|ssrRender)`
         await instance.options.patchTemplateCompileResults?.({
-          filePath: vuePluginData.descriptor.filename,
-          descriptor: vuePluginData.descriptor,
+          ...sfcCacheItem,
           templateCompileResults: ans,
-          COMP_IDENTIFIER,
-          scopeId: vuePluginData.scopeId,
-          hmrId: vuePluginData.hmrId,
-          compiledScript: await compiledScriptPromise
+          // note: `sfcCacheItem.compiledScript` is already updated by `await compiledScriptPromise` above
         })
 
         return await bundler.pluginUtils.applyPostProcessors(args, {
@@ -273,7 +281,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
 
       build.onLoad({ filter: /./, namespace: "sfc-script" }, async (args) => {
         const vuePluginData = args.pluginData.vue as VuePluginMiddleData;
-        const { descriptor, templateCompileOptions, id, hasTS, hasJSX, scopeId, hmrId, toESBuildError, provideCompiledScript } = vuePluginData;
+        const { descriptor, templateCompileOptions, id, hasTS, hasJSX, sfcCacheItem, toESBuildError, provideCompiledScript } = vuePluginData;
 
         const filename = descriptor.filename;
         let compiledScript: ReturnType<typeof compiler.compileScript>;
@@ -331,15 +339,15 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         const errors = compiledScript.warnings?.map(e => toESBuildError(e)) || [];
         if (errors.length > 0) return { errors };
 
+        // for `sfc-template` loader, and patch* hooks
+        // will also update sfcCacheItem.compiledScript
+        provideCompiledScript(null, compiledScript);
+
         // bundler allows injecting code for compiled <script>
         // and beware user MAY modify `compiledScript` in this hook
         await instance.options.patchCompiledScript?.({
-          filePath: filename,
-          descriptor,
+          ...sfcCacheItem,
           compiledScript,
-          COMP_IDENTIFIER,
-          scopeId,
-          hmrId,
         })
 
         // finally concat code
@@ -355,9 +363,6 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           map.mappings = ';'.repeat(countChar(codePrefix, '\n')) + map.mappings
           codeSuffix += '\n\n//# sourceMappingURL=data:application/json;base64,' + toBase64(JSON.stringify(map))
         }
-
-        // for `sfc-template` loader
-        provideCompiledScript(null, compiledScript);
 
         let esbuildLoader: esbuild.Loader = 'js';
         if (hasTS) esbuildLoader = 'ts';
@@ -390,20 +395,35 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           sourceMap: true,
         });
 
+        const sfcCacheItem: VueSfcCacheItem = {
+          filePath: filename,
+          descriptor,
+          sfcPraseErrors: errors,
+          COMP_IDENTIFIER,
+          scopeId: undefined, // will be filled later
+          hmrId: undefined, // will be filled later
+          compiledScript: undefined, // will be filled later
+        }
+        instance.sfcCache.set(filename, sfcCacheItem);
+
         const toESBuildError = makeToEsBuildErrorFunction({
           currentFile: descriptor.filename,
           offsetToPosition: (offset: number) => offsetToPosition(code, offset),
         })
+
         if (errors.length > 0) return {
           contents: code,
           errors: errors.map(e => toESBuildError(e))
         };
 
+        // ----------------------------------------------
         // sfc-template might need to know `bindingMetadata` from `scriptSetup`
+        // so provide a Promise via pluginData, and a updater function
 
         let provideCompiledScript!: VuePluginMiddleData['provideCompiledScript']
         let compiledScriptPromise: VuePluginMiddleData['compiledScriptPromise'] = new Promise((res, rej) => {
           provideCompiledScript = (err, data) => {
+            sfcCacheItem.compiledScript = data;
             if (err) rej(err)
             else res(data!)
           }
@@ -414,6 +434,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
 
         const hasScopedStyle = descriptor.styles.some(s => s.scoped);
         const scopeId = hasScopedStyle ? `data-v-${id}` : null;
+        if (scopeId) sfcCacheItem.scopeId = scopeId;
 
         const hasJSX = descriptor.script?.lang?.includes('x') || descriptor.scriptSetup?.lang?.includes('x');
         const hasTS = descriptor.script?.lang?.includes('ts') || descriptor.scriptSetup?.lang?.includes('ts');
@@ -493,6 +514,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         // hmr
         let hmrId = instance.options.hmr && String(await instance.options.hmrId(filename));
         if (hmrId) {
+          sfcCacheItem.hmrId = hmrId;
           const hmrIdEscaped = JSON.stringify(hmrId)
           outCodeParts.push(
             `${COMP_IDENTIFIER}.__hmrId = ${hmrIdEscaped};`,
@@ -509,13 +531,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         );
 
         // inject sfc runtime
-        const extraInject = await instance.options.injectSFCRuntime({
-          descriptor,
-          COMP_IDENTIFIER,
-          filePath: filename,
-          scopeId: scopeId || undefined,
-          hmrId: hmrId || undefined,
-        });
+        const extraInject = await instance.options.injectSFCRuntime(sfcCacheItem);
         if (extraInject) outCodeParts.push(extraInject);
 
         outCodeParts.push(
@@ -534,6 +550,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           hasJSX: !!hasJSX,
           hasTS: !!hasTS,
           toESBuildError,
+          sfcCacheItem,
           compiledScriptPromise,
           provideCompiledScript,
         }
@@ -570,6 +587,7 @@ interface VuePluginMiddleData {
   toESBuildError: ReturnType<typeof makeToEsBuildErrorFunction>;
   hasJSX: boolean;
   hasTS: boolean;
+  sfcCacheItem: VueSfcCacheItem;
 
   compiledScriptPromise: Promise<compiler.SFCScriptBlock | undefined>;
   provideCompiledScript: { // invoked by `scriptSetup`
