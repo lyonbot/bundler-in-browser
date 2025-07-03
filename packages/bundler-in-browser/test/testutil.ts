@@ -5,7 +5,6 @@ import { InMemory, fs } from '@zenfs/core';
 import { BundlerInBrowser } from 'bundler-in-browser';
 import esbuild from "esbuild-wasm";
 import type { BuildTreeNPMRegistry } from '@/npm/tree.js';
-import { create as createResolver } from 'enhanced-resolve'
 
 export function hookMiniNpm(npm: MiniNPM) {
   const $$latestVersion = Symbol('latestVersion')
@@ -74,6 +73,7 @@ export function hookMiniNpm(npm: MiniNPM) {
     addMockPackage,
     /** query the (nested) version of installed package */
     async ver(...pkgNames: string[]) {
+      const { create: createResolver } = await import('enhanced-resolve');
       const invokeResolver = createResolver({
         fileSystem: npm.fs as any,
         exportsFields: [], // ignore "exports" field, so we can read package.json
@@ -122,8 +122,19 @@ export async function createBundlerForTest(files: Record<string, string>) {
   return { fs, bundler }
 }
 
+declare var __IS_BROWSER__: boolean;
+
 export function initializeEsbuild() {
-  return _esbuildInitializePromise ||= esbuild.initialize({});
+  _esbuildInitializePromise ||= (async () => {
+    const opts =
+      __IS_BROWSER__
+        ? {
+          wasmURL: await import('esbuild-wasm/esbuild.wasm?url').then(m => m.default),
+        }
+        : {}
+    await esbuild.initialize(opts)
+  })();
+  return _esbuildInitializePromise
 }
 
 let _esbuildInitializePromise: Promise<any> | undefined;

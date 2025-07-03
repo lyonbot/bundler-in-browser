@@ -83,6 +83,7 @@
     "@types/path-browserify": "^1.0.3",
     "@types/semver": "^7.7.0",
     "@types/tar-stream": "^3.1.4",
+    "@vitest/browser": "^3.2.4",
     "@vue/compiler-core": "^3.5.17",
     "@zenfs/core": "^2.3.2",
     "enhanced-resolve": "^5.18.2",
