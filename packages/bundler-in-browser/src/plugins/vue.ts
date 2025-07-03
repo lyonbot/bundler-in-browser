@@ -5,7 +5,7 @@ import type { BundlerInBrowser } from "../BundlerInBrowser.js";
 import type esbuild from "esbuild-wasm";
 import path from "path";
 import { memoAsync, stripQuery } from '../utils/index.js';
-import { countChar, toBase64 } from '../utils/string.js';
+import { countChar, getLineText, offsetToPosition, toBase64 } from '../utils/string.js';
 
 export interface InstallVuePluginOptions {
   disableOptionsApi?: boolean;
@@ -119,108 +119,6 @@ export interface InstallVuePluginOptions {
 }
 
 const COMP_IDENTIFIER = '__vue_component__';
-function getFullPath(args: esbuild.OnResolveArgs) {
-  let filePath = stripQuery(args.path);
-  return path.isAbsolute(filePath) ? filePath : path.join(args.resolveDir || path.dirname(args.importer), filePath);
-}
-
-function getUrlParams(search: string): Record<string, string> {
-  let hashes = search.slice(search.indexOf('?') + 1).split('&')
-  return hashes.reduce((params, hash) => {
-    let [key, val] = hash.split('=')
-    return Object.assign(params, { [key]: decodeURIComponent(val || '') })
-  }, {})
-}
-
-function offsetToPosition(code: string, offset: number) {
-  let lineStart = 0;
-  let line = 1;
-  let lineEnd = code.length;
-
-  while (true) {
-    lineEnd = code.indexOf('\n', lineStart);
-
-    if (lineEnd === -1) { lineEnd = code.length; break; }
-    if (offset <= lineEnd) break;
-
-    line++;
-    lineStart = lineEnd + 1;
-  }
-
-  return {
-    line,
-    column: offset - lineStart,
-    lineText: code.slice(lineStart, lineEnd)
-  }
-}
-
-/**
- * @param source 
- * @param line start from 1
- * @returns 
- */
-function getLineText(source: string, line: number) {
-  if (!source || !(line >= 1)) return '';
-
-  let lineStart = 0;
-  let lineEnd = source.length;
-
-  while (true) {
-    lineEnd = source.indexOf('\n', lineStart);
-
-    if (lineEnd === -1) { lineEnd = source.length; break; }
-    if (line <= 1) break;
-
-    line--;
-    lineStart = lineEnd + 1;
-  }
-
-  return source.slice(lineStart, lineEnd)
-}
-
-type BabelSyntaxError = Error & { loc: { line: number, column: number, index: number, source: undefined } }
-
-function makeToEsBuildErrorFunction(ctx: {
-  offsetToPosition?: (offset: number) => { line: number; column: number; lineText?: string; };
-  currentFile: string;
-}) {
-  function toESBuildError(
-    e: string | SyntaxError | compiler.CompilerError | BabelSyntaxError
-  ): esbuild.PartialMessage {
-    if (typeof e === 'string') return { text: e };
-
-    if (e instanceof Error) {
-      if ('loc' in e && e.loc) {
-        let start: Position, end: Position;
-
-        if ('start' in e.loc) {
-          // vue error
-          start = e.loc.start;
-          end = e.loc.end || start;
-        } else {
-          // babel error
-          end = start = { line: e.loc.line, column: e.loc.column, offset: e.loc.index };
-        }
-
-        const locator = ctx.offsetToPosition?.(start.offset) || { line: start.line, column: start.column };
-        return {
-          text: e.message,
-          location: {
-            file: e.loc.source || ctx.currentFile,
-            ...locator,
-            length: end.offset - start.offset,
-          },
-        };
-      };
-      return { text: e.message };
-    }
-
-    return { text: String(e) };
-  };
-
-  toESBuildError.ctx = ctx;
-  return toESBuildError;
-}
 
 export interface VuePluginInstance {
   options: Required<InstallVuePluginOptions>;
@@ -477,7 +375,12 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         const fs = bundler.fs;
         const filename = args.path;
         const encPath = args.path.replace(/\\/g, "\\\\");
-        const code = fs.readFileSync(filename, 'utf8') as string;
+        const code = await new Promise<string>((res) => {
+          fs.readFile(filename, 'utf8', (err, data) => {
+            if (err) res(''); else res(data);
+          })
+        });
+        if (!code) return; // failed to read file
 
         // prepare common infos
 
@@ -704,4 +607,65 @@ async function invokeOptionsPatcher<T extends object, ARGS extends any[]>(userCf
   if (!userCfg) return initial;
   if (typeof userCfg === 'function') return await userCfg(initial, ...args);
   return { ...initial, ...userCfg };
+}
+
+function getFullPath(args: esbuild.OnResolveArgs) {
+  let filePath = stripQuery(args.path);
+  return path.isAbsolute(filePath) ? filePath : path.join(args.resolveDir || path.dirname(args.importer), filePath);
+}
+
+function getUrlParams(search: string): Record<string, string> {
+  let hashes = search.slice(search.indexOf('?') + 1).split('&')
+  return hashes.reduce((params, hash) => {
+    let [key, val] = hash.split('=')
+    return Object.assign(params, { [key]: decodeURIComponent(val || '') })
+  }, {})
+}
+
+
+type BabelSyntaxError = Error & { loc: { line: number, column: number, index: number, source: undefined } }
+
+/**
+ * generate a function that convert vue or babel error to esbuild error.
+ */
+function makeToEsBuildErrorFunction(ctx: {
+  offsetToPosition?: (offset: number) => { line: number; column: number; lineText?: string; };
+  currentFile: string;
+}) {
+  function toESBuildError(
+    e: string | SyntaxError | compiler.CompilerError | BabelSyntaxError
+  ): esbuild.PartialMessage {
+    if (typeof e === 'string') return { text: e };
+
+    if (e instanceof Error) {
+      if ('loc' in e && e.loc) {
+        let start: Position, end: Position;
+
+        if ('start' in e.loc) {
+          // vue error
+          start = e.loc.start;
+          end = e.loc.end || start;
+        } else {
+          // babel error
+          end = start = { line: e.loc.line, column: e.loc.column, offset: e.loc.index };
+        }
+
+        const locator = ctx.offsetToPosition?.(start.offset) || { line: start.line, column: start.column };
+        return {
+          text: e.message,
+          location: {
+            file: e.loc.source || ctx.currentFile,
+            ...locator,
+            length: end.offset - start.offset,
+          },
+        };
+      };
+      return { text: e.message };
+    }
+
+    return { text: String(e) };
+  };
+
+  toESBuildError.ctx = ctx;
+  return toESBuildError;
 }
