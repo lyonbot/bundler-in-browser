@@ -5,6 +5,10 @@ import { ref, watch } from "vue";
 import { createWorkerDispatcher, createWorkerHandler, makePromise } from "yon-utils";
 import { useBundlerController } from './bundler';
 
+// this file run in editor
+//
+// please refer to ../preview-runtime/runtime-handler.ts for runtime side
+
 export const useRuntimeConnection = defineStore('runtimeConnection', () => {
   const isConnected = ref(false);
   const bundler = useBundlerController()
@@ -33,7 +37,7 @@ export const useRuntimeConnection = defineStore('runtimeConnection', () => {
 
       isConnected.value = true;
       readyPromise.resolve();
-      runtime.sync()
+      runtime.sync(true)
     }
 
     const port = ch.port1
@@ -52,22 +56,28 @@ export const useRuntimeConnection = defineStore('runtimeConnection', () => {
   }
 
   /** send newest code to runtime */
-  function sync(data?: BundlerInBrowser.BuildResult) {
-    data ??= bundler.lastBundleOutput;
-    if (!data) return;
+  async function sync(noHMR?: boolean) {
+    const { buildResult, hmrPatch } = bundler.lastBundleOutput;
+    if (!buildResult) return;
 
-    runtime.api?.updateChunk({
-      name: 'vendor',
-      externals: data.vendorBundle.externals,
-      js: data.vendorBundle.js,
-      css: data.vendorBundle.css,
+    await runtime.api?.updateChunk('vendor', {
+      js: buildResult.vendor.js,
+      css: buildResult.vendor.css,
     })
-    runtime.api?.updateChunk({
-      name: 'user',
-      externals: data.userCode.externals,
-      js: data.userCode.js,
-      css: data.userCode.css,
-    })
+
+    if (hmrPatch && !noHMR) {
+      runtime.api?.applyHMR({
+        js: hmrPatch.js,   // incremental js
+        css: buildResult.user.css,   // whole css
+      })
+    } else {
+      runtime.api?.updateChunk('user', {
+        js: buildResult.user.js,
+        css: buildResult.user.css,
+      })
+      // runtime.api?.freeHMRMemory()  // TODO
+    }
+
   }
 
   watch(() => bundler.lastBundleOutput, () => sync())

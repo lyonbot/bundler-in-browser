@@ -1,5 +1,4 @@
 import type { BundlerInBrowser } from './BundlerInBrowser.js';
-import type { InstallVuePluginOptions, VuePluginInstance, OptionsPatcher, VueSfcCacheItem } from './plugins/vue.js';
 
 import * as npm from './npm/index.js';
 export { npm };
@@ -17,7 +16,8 @@ export async function installSassPlugin(bundler: BundlerInBrowser) {
 }
 
 /** add vue support. requires `vue@^3.2.14` installed */
+import type { InstallVuePluginOptions, VuePluginInstance, } from './plugins/vue.js';
 export async function installVuePlugin(bundler: BundlerInBrowser, opts?: InstallVuePluginOptions): Promise<VuePluginInstance> {
   return (await import('./plugins/vue.js')).default(bundler, opts);
 }
-export { type VuePluginInstance, type OptionsPatcher, type VueSfcCacheItem }
+export type { VuePluginInstance, OptionsPatcher, VueSfcCacheItem, InstallVuePluginOptions } from './plugins/vue.js'

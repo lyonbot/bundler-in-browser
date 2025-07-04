@@ -1,54 +1,51 @@
 // This file receives data from the editor.
 // and provide `editorApi` to talk to editor.
 
+import * as shabbyVueHMRConsts from "@/abilities/shabby-vue-hmr/consts";
+import { ShabbyVueHMRRuntime } from "@/abilities/shabby-vue-hmr/runtime-side";
 import * as vue from "vue";
 import { shallowRef } from "vue";
-import { createWorkerDispatcher, createWorkerHandler, makePromise, type ImperativePromiseEx } from "yon-utils";
+import { createWorkerDispatcher, createWorkerHandler, makePromise } from "yon-utils";
 
 export type RuntimeActions = typeof actionHandlers
 const actionHandlers = {
-  async updateChunk(built: BuiltChunk) {
-    builtChunkManager.updateChunk(built)
-  }
+  async updateChunk(name: 'user' | 'vendor', built: { js: string; css: string }) {
+    const mount = builtChunkManager.getChunk(name)
+    mount.updateJS(built.js)
+    mount.updateCSS(built.css)
+  },
+  async applyHMR(opts: { css: string, js: string }) {
+    // hmr is different. it execute incremental js,
+    // and replace the whole css
+    builtChunkManager.getChunk('hmr').updateJS(opts.js)
+    builtChunkManager.getChunk('user').updateCSS(opts.css)
+  },
 }
 
-export interface BuiltChunk {
-  name: 'user' | 'vendor'
-  externals: string[]
-  js: string
-  css: string
-}
 
 export const editorApi = shallowRef<EditorActions>();
 export type EditorActions = {
   notifyReady(): Promise<void>
 }
 
-//#region BuiltChunkManager -------------------------------------------
+//#region BuiltChunkManager and Vue HMR -------------------------------------------
 
-const $updatingPromise = Symbol('updatingPromise')
-declare global {
-  interface HTMLScriptElement {
-    [$updatingPromise]: ImperativePromiseEx<any>
-  }
-}
-
-class BuiltChunkMounter {
+class BuiltChunkMountPoint {
   name: string
-  previousChunk: BuiltChunk | null = null
   style: HTMLElement | Comment
   script: HTMLElement | Comment
 
-  revision = vue.ref(0)
-
-  /** 
-   * once the chunk is loaded, this will be resolved with the exports
+  /**
+   * current chunk state
    * 
-   * if `__updateBuiltChunk()` starts updating chunk, it will become a new pending Promise, 
-   * then resolve with newest exports
+   * is a reactive object, so you can watch it.
    */
-  loadPromise = makePromise<any>()
-  lastExports = {}
+  current = vue.shallowReactive({
+    css: '',
+    js: '',
+    exports: null as any,   // js execution result
+    exportsPromise: makePromise<any>(),
+  })
 
   constructor(name: string) {
     this.name = name
@@ -62,98 +59,117 @@ class BuiltChunkMounter {
     this.script = script
   }
 
-  update(chunk: BuiltChunk) {
-    const name = chunk.name
-    const prev = this.previousChunk
-    const updatingPromise = !prev ? this.loadPromise : (this.loadPromise = makePromise());
+  #isFirstJsExecute = true
+  updateJS(js: string) {
+    const { current, name } = this
+    if (js === current.js) return null; // no change
 
-    let changed = false
-    updatingPromise.then((exports) => {
-      this.lastExports = exports
-      if (changed) this.revision.value++
+    const promise = this.#isFirstJsExecute ? current.exportsPromise : (current.exportsPromise = makePromise<any>());
+    this.#isFirstJsExecute = false;
+
+    const prelude = `self.__runBuiltChunk(${JSON.stringify(name)}, (require, module, exports) => { `
+
+    const oldScript = this.script
+    const newScript = document.createElement('script')
+    newScript.addEventListener('executed', (evt: any) => {
+      const exports = evt.detail
+      promise.resolve(exports)
+      if (promise === current.exportsPromise) current.exports = exports
     })
+    newScript.setAttribute('data-built-chunk-name', this.name)
+    newScript.src = URL.createObjectURL(new Blob([prelude, js, '\n})'], { type: 'text/javascript' }));
 
-    if (chunk.css !== prev?.css) {
-      const style = document.createElement('style')
-      style.textContent = chunk.css
-      this.style.replaceWith(style)
-      this.style = style
+    oldScript.after(newScript)
+    this.script = newScript
 
-      changed = true
-    }
+    current.js = js
+    return promise
+  }
 
-    if (chunk.js !== prev?.js) {
-      const prelude = `self.__updateBuiltChunk(${JSON.stringify(name)}, (require, module, exports) => { `
+  updateCSS(css: string) {
+    const current = this.current
+    if (css === current.css) return false; // no change
 
-      const oldScript = this.script
-      const newScript = document.createElement('script')
-      newScript.setAttribute('data-built-chunk-name', name)
-      newScript.src = URL.createObjectURL(new Blob([prelude, chunk.js, '\n})'], { type: 'text/javascript' }));
-      newScript[$updatingPromise] = updatingPromise
+    const style = document.createElement('style')
+    style.textContent = css
+    style.setAttribute('data-built-chunk-name', this.name)
+    this.style.replaceWith(style)
+    this.style = style
 
-      oldScript.after(newScript)
-      this.script = newScript
-      changed = true
-    } else {
-      updatingPromise.resolve(this.lastExports)
-    }
-
-    this.previousChunk = chunk
+    current.css = css
+    return true;
   }
 }
 
+const shabbyVueHMRRuntime = new ShabbyVueHMRRuntime()
+
 function createBuiltChunkManager() {
-  const chunkMounters: Record<string, BuiltChunkMounter> = {
-    vendor: new BuiltChunkMounter('vendor'),  // go first! affect insert position
-    user: new BuiltChunkMounter('user'),
-  };
+  const chunkMounters = {
+    vendor: new BuiltChunkMountPoint('vendor'),  // go first! affect insert position
+    user: new BuiltChunkMountPoint('user'),
+    hmr: new BuiltChunkMountPoint('hmr'),
+  } satisfies Record<string, BuiltChunkMountPoint>
 
   const builtinModules: Record<string, any> = {
     vue,
     "@runtime/require": fakeRequire,
   };
 
-  (window as any).__updateBuiltChunk = (name: string, factory: (require: any, module: any, exports: any) => any) => {
+  // a global function for loaded script
+  (window as any).__runBuiltChunk = (name: string, factory: (require: any, module: any, exports: any) => any) => {
+    // find the promise to resolve, when chunk code executed
+    // it's on current script element, with special attribute
+    const scriptEl = document.currentScript as HTMLScriptElement;
+    const resolve = (exports: any) => scriptEl.dispatchEvent(new CustomEvent('executed', { detail: exports }));
 
-    const el = document.currentScript as HTMLScriptElement;
-    const updatingPromise = el?.[$updatingPromise];
-    if (!updatingPromise) throw new Error('no current script');
-
+    // before run, wait for its dependencies
     const pendingPromises: Promise<any>[] = [];
-    if (name !== 'vendor') pendingPromises.push(chunkMounters.vendor.loadPromise); // vendor chunk must be loaded first
+    if (name === 'user') pendingPromises.push(
+      chunkMounters.vendor.current.exportsPromise,   // user chunk shall run after vendor
+    );
 
+    // now run the chunk code
     const module = { exports: {} }
     Promise.all(pendingPromises)
       .then(() => (factory(fakeRequire, module, module.exports), module.exports))
       .then(exports => {
-        console.log('updating chunk', name, exports)
-        updatingPromise.resolve(exports)
+        // now chunk code executed, resolve its promise with the exports
+        console.log(`[chunk:${name}] executed`, exports)
+        resolve(exports)
       })
   }
 
   function fakeRequire(id: string) {
+    // preinstalled like `vue`
     if (id in builtinModules) return builtinModules[id]
 
-    const vendorExports = chunkMounters.vendor.loadPromise.value
+    // vue-shabby-hmr:runtime
+    // see ../shabby-vue-hmr/README.md
+    if (id === shabbyVueHMRConsts.virtualPathRuntime) return shabbyVueHMRRuntime;
+    if (id.startsWith(shabbyVueHMRConsts.virtualPathInheritImportsPrefix)) {
+      const hmrId = id.slice(shabbyVueHMRConsts.virtualPathInheritImportsPrefix.length)
+      const deps = shabbyVueHMRRuntime.getDeps(hmrId)
+      return deps
+    }
+
+    // vendor bundle's export
+    if (chunkMounters.vendor.current.exportsPromise.status !== 'fulfilled') {
+      throw new Error('vendor chunk status: ' + chunkMounters.vendor.current.exportsPromise.status)
+    }
+    const vendorExports = chunkMounters.vendor.current.exports;
     const deps = vendorExports.deps;
     if (id in deps) return deps[id]();
 
+    // unknown
     throw new Error(`Unknown require id: ${id}`)
   }
 
   return {
-    updateChunk(chunk: BuiltChunk) {
-      let chunkMounter = this.getChunk(chunk.name)
-      chunkMounter.update(chunk)
-    },
-    async getChunkExports(name: string) {
+    getChunk: (name: keyof typeof chunkMounters) => {
       const mounter = chunkMounters[name]
       if (!mounter) throw new Error(`Unknown chunk name: ${name}`)
-      return await mounter.loadPromise
-    },
-    getChunk(name: string) {
-      return chunkMounters[name]
-    },
+      return mounter
+    }
   }
 }
 

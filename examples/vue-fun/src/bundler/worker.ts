@@ -4,11 +4,11 @@
 // the worker is created by ./controller.ts
 //
 
-import { createWorkerHandler, noop } from "yon-utils"
+import { createWorkerHandler } from "yon-utils"
 import { BundlerInBrowser, installSassPlugin, installVuePlugin, type VuePluginInstance } from "bundler-in-browser";
 import installTailwindPlugin from "@bundler-in-browser/tailwindcss";
 import { fs } from "@zenfs/core";
-import { vueInspectorNodeTransform, vuePatchScriptForInspector } from "../vue-inspector/for-bundler";
+import * as shabbyVueHMR from '../abilities/shabby-vue-hmr/bundler-side.js'
 import { dirname, join } from "@zenfs/core/path.js";
 import { throttle } from "lodash-es";
 
@@ -48,46 +48,46 @@ async function init() {
   log('init done');
 }
 
-let vuePluginInstance!: VuePluginInstance
 let isProd = false
+let vuePluginInstance!: VuePluginInstance
+
 async function setProdMode(_isProd: boolean) {
   isProd = _isProd;
-  if (isProd) {
-    // use default Vue compiler options
-    vuePluginInstance.options.templateCompilerOptions = null
-    vuePluginInstance.options.patchCompiledScript = noop
-    vuePluginInstance.options.patchTemplateCompileResults = noop
-  } else {
-    vuePluginInstance.options.templateCompilerOptions = {
-      nodeTransforms: [
-        vueInspectorNodeTransform, // add `data-v-inspector` attribute to all Vue elements
-      ],
-    }
-    vuePluginInstance.options.patchCompiledScript = ({ compiledScript }) => {
-      const out = vuePatchScriptForInspector(compiledScript.content, compiledScript.map?.mappings)
-      if (out) {
-        compiledScript.content = out[0]
-        if (compiledScript.map) compiledScript.map.mappings = out[1]
-      }
-    }
-    vuePluginInstance.options.patchTemplateCompileResults = ({ templateCompileResults }) => {
-      const out = vuePatchScriptForInspector(templateCompileResults.code, templateCompileResults.map?.mappings)
-      if (out) {
-        templateCompileResults.code = out[0]
-        if (templateCompileResults.map) templateCompileResults.map.mappings = out[1]
-      }
-    }
-  }
+  shabbyVueHMR.setEnableVueHMR(vuePluginInstance, !isProd)
 }
 
 const sendCompileProgress = throttle((message: string) => postMessage({ type: 'worker-compiling-progress', message }), 100)
 async function compile() {
   try {
+    resetModifiedList()
     const out = await bundler.build()
-    return out
+    return {
+      user: { js: out.userCode.js, css: out.userCode.css },
+      vendor: { js: out.vendorBundle.js, css: out.vendorBundle.css },
+    }
   } finally {
     sendCompileProgress.cancel()
   }
+}
+
+/**
+ * try to make a HMR patch for the modified files.
+ * 
+ * 🖖 for now only support .vue files.
+ * 
+ * if success, will return a chunk, otherwise return undefined.
+ * 
+ * also, please do a completed compile after this, so you can get the new `css` for your project,
+ * and the next HMR patch can be generated correctly.
+ */
+async function tryMakeHMRPatch() {
+  // FIXME: bundler-in-browser shall support HMR, so this function will be removed
+
+  if (isProd) return;
+
+  const changedPath = [...modifiedFiles.keys()]
+  const result = await shabbyVueHMR.tryBuildHMRPatch(vuePluginInstance, changedPath)
+  return result
 }
 
 // #region file access
@@ -192,6 +192,7 @@ const resetModifiedList = async () => {
 const methods = {
   init,
   compile,
+  tryMakeHMRPatch,
 
   // fs
   readdir,

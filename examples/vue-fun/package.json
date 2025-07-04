@@ -16,7 +16,7 @@
         "@vue/language-service": "3.0.0-alpha.8",
         "@vue/repl": "^4.6.1",
         "@vueuse/core": "^13.4.0",
-        "@zenfs/core": "^2.3.2",
+        "@zenfs/core": "^2.3.3",
         "buffer": "^6.0.3",
         "bundler-in-browser": "workspace:^0.2.0",
         "dayjs": "^1.11.13",

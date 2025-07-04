@@ -51,9 +51,9 @@ export class VendorCodeEsbuildHelper extends EsbuildHelper<VendorBundleResult> {
       outdir: vendorDir,
       plugins: [
         vendorEntryPlugin,
-        this.getExternalPlugin(),
         ...bundler.vendorPlugins,
         ...bundler.commonPlugins,
+        this.getExternalPlugin(),
         createESBuildResolver(bundler),
         createESBuildNormalLoader(bundler),
       ],

@@ -47,10 +47,10 @@ export class UserCodeEsbuildHelper extends EsbuildHelper<BuildUserCodeResult> {
       outdir: "/user",
       metafile: true,
       plugins: [
-        this.getExternalPlugin(),
         ...bundler.userCodePlugins,
-        npmCollectPlugin(),
         ...bundler.commonPlugins,
+        this.getExternalPlugin(),
+        npmCollectPlugin(),
         createESBuildResolver(bundler),
         createESBuildNormalLoader(bundler),
       ],

@@ -100,6 +100,7 @@ export interface InstallVuePluginOptions {
 const COMP_IDENTIFIER = '__vue_component__';
 
 export interface VuePluginInstance {
+  bundler: BundlerInBrowser;
   options: Required<InstallVuePluginOptions>;
   plugin: esbuild.Plugin;
   /** 
@@ -149,6 +150,7 @@ const defaultOptions: Required<InstallVuePluginOptions> = {
 
 export default function installVuePlugin(bundler: BundlerInBrowser, opts: InstallVuePluginOptions = {}) {
   const instance: VuePluginInstance = {
+    bundler,
     options: {
       ...defaultOptions,
       ...opts,

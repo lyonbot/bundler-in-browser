@@ -26,14 +26,25 @@ export const useBundlerController = defineStore('workerController', () => {
     console.error(e);
   })
 
-  const lastBundleOutput = shallowRef<BundlerInBrowser.BuildResult | undefined>(undefined);
+  const lastBundleOutput = shallowRef<{
+    buildResult?: Awaited<ReturnType<BundlerController['api']['compile']>>
+    hmrPatch?: { js: string }
+  }>({})
+
   const compile = async () => {
     try {
+      await readyPromise;
+      console.log('compiling...');
+
       isCompiling.value = 'compiling...';
 
-      const result = await worker.api.compile();
+      const hmrPatch = await worker.api.tryMakeHMRPatch();  // do this before compile whole project
+      const buildResult = await worker.api.compile();
 
-      lastBundleOutput.value = result;
+      const result = lastBundleOutput.value = {
+        buildResult,
+        hmrPatch,
+      }
       console.log('compile', result);
       return result;
     } finally {

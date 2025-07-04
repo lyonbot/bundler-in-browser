@@ -41,35 +41,41 @@ flowchart LR
 
 ## tech details
 
-### run modules in runtime
-
-the runtime accept `BuiltChunk`s:
-
-- "user": the user component `export default Main`
-- "vendor": the vendor modules `export default { deps: { zod: ()=>..., "@vinejs/vine": ()=>..., ... } }`
+### compile and run
 
 #### run `BuiltChunk` with `BuiltChunkManager`
 
-a `BuiltChunk` may update (eg. user updated the code), hence i made a `BuiltChunkManager` to load and update them in [preview-runtime/runtime-handler.ts](./src/preview-runtime/runtime-handler.ts)
+in this experiment, bundler-in-browser makes `BuiltChunk`s:
 
-esbuild output cjs by default, which relies on global volatile `require` and `module`. to fix them, the built code will be wrapped within `window.__updateBuiltChunk(name, function (require, module, exports) {`
+- "user": the user component `export default Main`
+- "vendor": the vendor modules `export const deps = { zod: ()=>..., "@vinejs/vine": ()=>..., ... }`
+
+each `BuiltChunk` contains cjs and css result. the built chunks will be sent to previewer via `RuntimeConnection`, and then executed there.
+
+user may rebuild many times. new chunk is handled by [`BuiltChunkManager`](./src/preview-runtime/runtime-handler.ts).
+it reloads style and script tags, and notify the [ComponentHost](./src/preview-runtime/ComponentHost.vue)
+
+esbuild output cjs by default, which relies on global volatile variable `require` and `module`. to fix them, the built code will be wrapped as a **factory function** within `window.__runBuiltChunk(name, function (require, module, exports) { ... })`.
 
 > why squeeze the prelude into single line? because it will remain sourcemap reusable without modification! only first line of bundled code is affected, and in most cases user code remain safe.
 
-the mechanism is kinda different from regular AMD like requirejs. in the "user" chunk, `require()` shall pull dep modules from "vendor" chunk, or platform built-in modules like `vue`. and that's why you can find a `fakeRequire` in [preview-runtime/runtime-handler.ts](./src/preview-runtime/runtime-handler.ts)
+#### dependencies
 
-there is no remote loading, so I simply made a shabby `define` function, rather than use completed `requirejs`.
+the mechanism is kinda different from regular AMD like requirejs. in the chunks, a [forged `fakeRequire()`](./src/preview-runtime/runtime-handler.ts) is used as the `require` in factory functions.
 
-> actually it's because requirejs cannot overwrite existing module with same id. in this app, when vendor chunk change, the user chunk must be modified too, so it's not a problem.
+the `fakeRequire()` may take dependency modules from
 
-1. get chunk js, css, marking the `BuiltChunkMounter` as updating, with a new Promise `updatingPromise`
-2. update chunk HTMLScriptElement and HTMLStyleElement
-3. the script will execute and call `window.__updateBuiltChunk(name, factory)`
-4. (if not vendor chunk), wait for vendor's updatingPromise
-5. invoke factory, then resolve chunk's `updatingPromise` with the exports. the promise is retrieved from `currentScript[$updatingPromise]`
-6. once promise resolved, all dependents will be notified, like the component host.
+2. platform built-in modules like `vue`
+3. reusing imported modules for Vue HMR (see [./src/abilities/shabby-vue-hmr/README.md](./src/abilities/shabby-vue-hmr/README.md))
+1. "vendor" chunk
 
-### add source location to vue components
+as mentioned before, "vendor" chunk may update too, so we can't use `requirejs` which can't overwrite existing module with same id. however, in this app, when vendor chunk changes, the user chunk must be modified and will be reloaded, so it's safe to overwrite.
+
+### vue hmr
+
+see [./src/abilities/shabby-vue-hmr/README.md](./src/abilities/shabby-vue-hmr/README.md)
+
+### dom to source mapping (vue-inspector)
 
 basically borrowed idea and impl from [vue-inspector](https://github.com/webfansplz/vite-plugin-vue-inspector/blob/main/packages/core/src/compiler/template.ts)
 
