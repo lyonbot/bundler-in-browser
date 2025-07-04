@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { wrapCommonJS } from '../../src/utils/string.js';
 import { createBundlerForTest, initializeEsbuild } from '../testutil.js';
-import { installVuePlugin } from 'bundler-in-browser';
+import { installVuePlugin, installSassPlugin } from 'bundler-in-browser';
 import { newFunction } from 'yon-utils';
 import { insertElement, insertStyle, resetInsertedElements } from './e2eutils.js';
 
@@ -212,5 +212,62 @@ describe('vue', () => {
     expect(container.querySelector('.msg')?.textContent).toEqual('hello'); // reset
     expect(container.querySelector('button')?.textContent).toEqual('修改！');
     expect(getComputedStyle(container.querySelector('.msg')!).color).toEqual('rgb(0, 0, 255)');
+  })
+
+  it('tailwindcss + scss', async () => {
+    const { bundler } = await createBundlerForTest({
+      '/src/index.js': `
+        import "./main.scss";
+        import App from './App.vue';
+        export default App;
+      `,
+      '/src/main.scss': `
+        @tailwind base;
+        @tailwind components;
+        @tailwind utilities;
+      `,
+      '/src/App.vue': `
+        <template>
+          <div class="msg bg-[#ff0000]">hello</div>
+        </template>
+
+        <style lang="scss">
+          .msg {
+            @apply text-[#00ff00];
+          }
+        </style>
+      `,
+    })
+
+    const { default: installTailwindPlugin } = await import('../../../tailwindcss/dist/index.js');
+    await installVuePlugin(bundler);
+    await installSassPlugin(bundler);
+    await installTailwindPlugin(bundler, {
+      rootDir: "/src",
+      tailwindConfig: {
+        corePlugins: {
+          preflight: false,
+        },
+      },
+
+      pattern: /\.(css|scss|html|vue|jsx?|tsx?|md)$/,
+    });
+
+    const result = await bundler.build();
+
+    // run js
+    const App = runJsGetExports(result.js).default;
+    const container = document.createElement('div');
+    insertElement(container);
+    Vue.createApp(App).mount(container);
+
+    // insert css
+    insertStyle(result.css);
+
+    // assert
+    const div = container.querySelector('.msg')!;
+    expect(div.textContent).toEqual('hello');
+    expect(getComputedStyle(div).backgroundColor).toEqual('rgb(255, 0, 0)');
+    expect(getComputedStyle(div).color).toEqual('rgb(0, 255, 0)');
   })
 })

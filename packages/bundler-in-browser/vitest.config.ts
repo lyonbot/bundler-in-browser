@@ -21,6 +21,9 @@ export default defineConfig({
         define: {
           '__IS_BROWSER__': 'true',
         },
+        optimizeDeps: {
+          exclude: ['@bundler-in-browser/*', 'bundler-in-browser']
+        },
         test: {
           name: { label: 'e2e' },
           globals: true,

@@ -398,7 +398,7 @@ export class BundlerInBrowser {
     applyPostProcessors: async (args: esbuild.OnLoadArgs, result: esbuild.OnLoadResult) => {
       for (const processor of this.config.postProcessors) {
         const { test } = processor;
-        if (typeof test === 'function' && !test(args)) continue;
+        if (typeof test === 'function' && !test(args, result)) continue;
         else if (test instanceof RegExp && !test.test(args.path)) continue;
 
         try {

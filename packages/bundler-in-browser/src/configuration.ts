@@ -26,10 +26,12 @@ export function getDefaultBuildConfiguration() {
       /**
        * test file path or a function to test file path.
        * 
-       * @example /\.css$/i
+       * @remarks **pitfall**: checking extname of `req.path` is not reliable! please ALSO check `res.loader` (although this can be `undefined` too)
+       * 
+       * @example (req, res) => /\.css$/i.test(args.path) || res.loader === 'css' || res.loader === 'local-css'
        * @example args => /\.css$/.test(args.path) && args.suffix.includes('?type=xxx')
        */
-      test: RegExp | ((args: esbuild.OnLoadArgs) => boolean),
+      test: RegExp | ((args: esbuild.OnLoadArgs, result: esbuild.OnLoadResult) => boolean),
       /**
        * process the file, modify `result`
        * 
