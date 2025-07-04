@@ -47,8 +47,8 @@ export default defineConfig({
       name: 'copy-preflight',
       apply: 'build',
       async buildStart() {
-        const file = './goods/preflight.css';
-        await writeFile(file, await readFile('./node_modules/tailwindcss/src/css/preflight.css', 'utf-8'), 'utf-8');
+        await mkdir('./goods').catch(() => { });
+        await writeFile('./goods/preflight.css', await readFile('./node_modules/tailwindcss/src/css/preflight.css', 'utf-8'), 'utf-8');
       },
     }
   ],
