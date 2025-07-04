@@ -1,5 +1,22 @@
 # bundler-in-browser
 
+## 0.3.0
+
+### Minor Changes
+
+- 8b1b335: refactor with cleaner api and workflow
+
+### Patch Changes
+
+- 0c19f98: fix: resolve esm instead of commonjs
+- d9ec9c8: new npm client impl
+- d81558c: allow patch package.json before installing it
+- 1739acc: make IFs type declaration more versatile
+- 3f45e54: rename vendorExports to importedPaths
+- 11188ec: fix incorrect guide about onLoad args.path
+- 2796ef6: add collecting for each user file's dependents
+- d809d43: change esbuild-wasm as peer dep
+
 ## 0.2.0
 
 ### Minor Changes

@@ -1,5 +1,17 @@
 # @bundler-in-browser/tailwindcss
 
+## 0.2.0
+
+### Minor Changes
+
+- 8b1b335: refactor with cleaner api and workflow
+- ???????: add css reset (preflight) guide and css file
+
+### Patch Changes
+
+- Updated dependencies [d809d43]
+  - bundler-in-browser@0.3.0
+
 ## 0.1.3
 
 ### Patch Changes

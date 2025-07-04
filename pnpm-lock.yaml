@@ -45,7 +45,7 @@ importers:
   examples/main:
     dependencies:
       '@bundler-in-browser/tailwindcss':
-        specifier: workspace:^0.1.3
+        specifier: workspace:^0.2.0
         version: link:../../packages/tailwindcss
       '@monaco-editor/react':
         specifier: ^4.7.0
@@ -66,7 +66,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       bundler-in-browser:
-        specifier: workspace:^0.2.0
+        specifier: workspace:^0.3.0
         version: link:../../packages/bundler-in-browser
       dayjs:
         specifier: ^1.11.13
@@ -97,7 +97,7 @@ importers:
   examples/vue-fun:
     dependencies:
       '@bundler-in-browser/tailwindcss':
-        specifier: workspace:^0.1.3
+        specifier: workspace:^0.2.0
         version: link:../../packages/tailwindcss
       '@unocss/reset':
         specifier: ^66.3.2
@@ -127,7 +127,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       bundler-in-browser:
-        specifier: workspace:^0.2.0
+        specifier: workspace:^0.3.0
         version: link:../../packages/bundler-in-browser
       dayjs:
         specifier: ^1.11.13
@@ -297,7 +297,7 @@ importers:
         specifier: ^10.4.21
         version: 10.4.21(postcss@8.5.6)
       bundler-in-browser:
-        specifier: workspace:^0.2.0
+        specifier: workspace:^0.3.0
         version: link:../bundler-in-browser
       esbuild-wasm:
         specifier: ^0.25.5
