@@ -28,6 +28,7 @@ export default defineConfig({
           name: { label: 'e2e' },
           globals: true,
           browser: {
+            provider: process.env.CI ? 'playwright' : 'preview',
             enabled: true,
             instances: [
               { browser: 'chromium' },

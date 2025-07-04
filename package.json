@@ -10,6 +10,8 @@
   },
   "scripts": {
     "build": "pnpm run -r build",
+    "build:packages": "pnpm run -r --filter \"./packages/*\" build",
+    "build:examples": "pnpm run -r --filter \"./examples/*\" build",
     "test": "pnpm run -r test",
     "start": "NODE_ENV=development pnpm run -r --parallel --filter \"./packages/*\" --filter \"./examples/${EXAMPLE_NAME:-main}\" dev",
     "start:vue-fun": "EXAMPLE_NAME=vue-fun pnpm run start"
