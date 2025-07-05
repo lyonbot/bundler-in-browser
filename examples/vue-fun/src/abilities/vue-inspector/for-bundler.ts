@@ -3,10 +3,9 @@
 //
 
 import { type AttributeNode, type RootNode, type SourceLocation, type TemplateChildNode } from '@vue/compiler-core'
+import { ATTR_KEY, KEY_PROPS_DATA } from './constants'
 
 const EXCLUDE_TAG = ['template', 'script', 'style']
-const KEY_PROPS_DATA = '__v_inspector'
-const ATTR_KEY = 'data-v-inspector'
 
 const getFakeLoc = (): SourceLocation => ({
   start: { offset: 0, line: 0, column: 0 },

@@ -8,7 +8,7 @@ import { createWorkerHandler } from "yon-utils"
 import { BundlerInBrowser, installSassPlugin, installVuePlugin, type VuePluginInstance } from "bundler-in-browser";
 import installTailwindPlugin from "@bundler-in-browser/tailwindcss";
 import { fs } from "@zenfs/core";
-import * as shabbyVueHMR from '../abilities/shabby-vue-hmr/bundler-side.js'
+import * as shabbyVueHMR from '../abilities/shabby-vue-hmr/for-bundler.js'
 import { dirname, join } from "@zenfs/core/path.js";
 import { throttle } from "lodash-es";
 

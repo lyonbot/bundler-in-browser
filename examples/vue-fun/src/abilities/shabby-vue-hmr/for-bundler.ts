@@ -3,7 +3,7 @@ import type { VuePluginInstance, VueSfcCacheItem } from "bundler-in-browser";
 import { forEach, noop } from "yon-utils";
 import * as compiler from 'vue/compiler-sfc';
 import type { Plugin } from "esbuild-wasm";
-import { virtualPathRuntime, virtualPathInheritImportsPrefix } from "./consts";
+import { virtualPathRuntime, virtualPathInheritImportsPrefix } from "./constants";
 
 class State {
   constructor(

@@ -1,5 +1,4 @@
-const KEY_PROPS_DATA = '__v_inspector'
-const ATTR_KEY = 'data-v-inspector'
+import { KEY_PROPS_DATA, ATTR_KEY } from "./constants"
 
 /**
  * for runtime, try to get the `data-v-inspector` attribute from an element.

@@ -1,8 +1,8 @@
 // This file receives data from the editor.
 // and provide `editorApi` to talk to editor.
 
-import * as shabbyVueHMRConsts from "@/abilities/shabby-vue-hmr/consts";
-import { ShabbyVueHMRRuntime } from "@/abilities/shabby-vue-hmr/runtime-side";
+import * as shabbyVueHMRConsts from "@/abilities/shabby-vue-hmr/constants";
+import { ShabbyVueHMRRuntime } from "@/abilities/shabby-vue-hmr/for-runtime";
 import * as vue from "vue";
 import { shallowRef } from "vue";
 import { createWorkerDispatcher, createWorkerHandler, makePromise } from "yon-utils";
