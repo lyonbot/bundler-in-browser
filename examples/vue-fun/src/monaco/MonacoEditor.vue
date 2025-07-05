@@ -64,22 +64,7 @@ watch(() => props.path, (path, _, onCleanup) => {
       }
     ))
   } else {
-    const uri = monaco.Uri.file(path)
-    model = monaco.editor.getModel(uri);
-    if (!model) {
-      model = monaco.editor.createModel(props.modelValue, undefined, uri)
-      editorStore.getFileContent(path).then((content) => {
-        if (content === undefined) {
-          editorStore.updateFileContent(path, '')
-          model.setValue('')
-        } else {
-          model.setValue(content)
-        }
-      })
-      model.onDidChangeContent(() => {
-        editorStore.updateFileContent(path, model.getValue())
-      })
-    }
+    model = editorStore.getMonacoModelOfPath(path)
   }
 
   currentModel = model
@@ -105,12 +90,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  const model = editor?.getModel() || currentModel
   if (editor) editor.dispose();
-
-  setTimeout(() => {
-    if (model && !model.isAttachedToEditor()) model.dispose()
-  }, 1000)
 });
 </script>
 

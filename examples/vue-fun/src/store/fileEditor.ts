@@ -140,6 +140,61 @@ export const useFileEditorStore = defineStore('editor', () => {
         model.onWillDispose(() => scope.stop())
     }))
 
+    /**
+     * get the monaco model of path (path must be in `openedFiles` already)
+     * 
+     * @remarks it auto disposes when file is closed
+     */
+    function getMonacoModelOfPath(path: string) {
+        const uri = monaco.Uri.file(path)
+        let existing = monaco.editor.getModel(uri);
+        if (existing && !existing.isDisposed()) return existing
+
+        if (!openedFiles.value.includes(path)) throw new Error(`path ${path} is not opened`)
+
+        const model = monaco.editor.createModel('', undefined, uri)
+        const attached = ref(false)
+
+        // this scope will dispose along with model
+        const scope = effectScope()
+        model.onWillDispose(() => scope.stop())
+        scope.run(() => {
+            watchPostEffect(() => {
+                if (!attached.value && !openedFiles.value.includes(path)) {
+                    model.dispose()
+                }
+            })
+        })
+
+        model.onDidChangeAttached(() => {
+            attached.value = model.isAttachedToEditor()
+        })
+
+        getFileContent(path).then((content) => {
+            if (content === undefined) {
+                updateFileContent(path, '')
+                model.setValue('')
+            } else {
+                model.setValue(content)
+            }
+
+            model.onDidChangeContent(() => {
+                updateFileContent(path, model.getValue())
+            })
+        })
+        return model
+    }
+
+    async function getFileContent(path: string) {
+        await bundler.readyPromise
+        return bundler.worker.api.readFile(path)
+    }
+
+    async function updateFileContent(path: string, content: string) {
+        await bundler.readyPromise;
+        return bundler.worker.api.writeFile(path, content);
+    }
+
     return {
         activeFilePath,
         openedFiles,
@@ -148,19 +203,14 @@ export const useFileEditorStore = defineStore('editor', () => {
 
         openFile,
         closeFile,
-        getFileContent: async (path: string) => {
-            await bundler.readyPromise
-            return bundler.worker.api.readFile(path)
-        },
-        updateFileContent: async (path: string, content: string) => {
-            await bundler.readyPromise
-            return bundler.worker.api.writeFile(path, content)
-        },
+        getFileContent,
+        updateFileContent,
 
         fileMarkers,
         fileDecorations,
         pathToEditors,
         waitForEditor,
+        getMonacoModelOfPath,
 
         openFileAndGoTo,
     }
