@@ -97,17 +97,32 @@ async function selectElementByClick() {
     e.preventDefault();
     e.stopPropagation();
 
-    const { hoveringElement, hoveringInfo } = state
-    if (!hoveringElement || !hoveringInfo) return promise.resolve()
+    const nodes: InspectorRuntimeApi.PickResultNode[] = []
+
+    let ptr = state.hoveringElement
+    while (ptr) {
+      const el = ptr
+      ptr = ptr.parentElement
+
+      const { left, top, width, height } = el.getBoundingClientRect()
+      const info = getInspectorDataFromElement(el)
+      if (!info) continue
+
+      nodes.push({
+        rect: { left, top, width, height },
+        type: 'node',
+        loc: {
+          start: { line: info.start.line, column: info.start.column },
+          end: { line: info.end.line, column: info.end.column },
+          source: info.source,
+        },
+      })
+    }
 
     promise.resolve({
-      type: 'node',
-      uniqueSelector: '', // TODO: get uniqueSelector
-      loc: {
-        start: { line: hoveringInfo.start.line, column: hoveringInfo.start.column },
-        end: { line: hoveringInfo.end.line, column: hoveringInfo.end.column },
-        source: hoveringInfo.source,
-      }
+      clientX: e.clientX,
+      clientY: e.clientY,
+      nodes
     })
   }
 

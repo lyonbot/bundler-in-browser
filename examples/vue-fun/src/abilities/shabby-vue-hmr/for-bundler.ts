@@ -15,7 +15,7 @@ class State {
         vueInspectorNodeTransform, // add `data-v-inspector` attribute to all Vue elements
       ],
     }
-    vuePlugin.options.patchCompiledScript = ({ compiledScript, hmrId }) => {
+    vuePlugin.options.patchCompiledScript = ({ filePath, compiledScript, hmrId }) => {
       const out = vuePatchScriptForInspector(compiledScript.content, compiledScript.map?.mappings)
       if (out && hmrId) {
         const [code, mappings] = out
@@ -25,6 +25,14 @@ class State {
 
       // for hmr
       const importedSymbols = Object.keys(compiledScript.imports || {})
+      if (this.isBuildingHMRPatch) {
+        // check whether no new import added (maybe someday bundler-in-browser will support better)
+        for (const id of importedSymbols) {
+          if (!this.vueFiles[filePath].importedSymbols.has(id)) {
+            throw new Error(`[vue-inspector] HMR patch failed: new import added: ${id}`)
+          }
+        }
+      }
       compiledScript.content += `
         import __vueShabbyHMRExtra from ${str(virtualPathRuntime)};
           __vueShabbyHMRExtra.rememberDep(${str(hmrId)}, { ${importedSymbols.join(', ')} });`
@@ -46,6 +54,7 @@ class State {
     hmrId: string,
     oldDescriptor: import('vue/compiler-sfc').SFCDescriptor,
     newDescriptor: import('vue/compiler-sfc').SFCDescriptor,
+    importedSymbols: Set<string>,
     op: 'reload' | 'rerender',
     // style not cared -- we always rebuild whole project later
   }> = {}
@@ -65,12 +74,15 @@ class State {
     if (index !== -1) bundler.userCodePlugins.splice(index, 1)
   }
 
+  get isBuildingHMRPatch() {
+    return Object.keys(this.vueFiles).length > 0
+  }
   mockEntryPlugin: Plugin = {
     name: 'vue-shabby-hmr',
     setup: (build) => {
-      const vueFiles = this.vueFiles
-      if (Object.keys(vueFiles).length === 0) return;
+      if (!this.isBuildingHMRPatch) return;
 
+      const vueFiles = this.vueFiles
       const namespace = 'vue-shabby-hmr';
 
       // file provider: entry and hmr-patch
@@ -184,10 +196,9 @@ class State {
       const scriptChanged = oldDescriptor.script?.content !== newDescriptor.script?.content
       const scriptSetupChanged = oldDescriptor.scriptSetup?.content !== newDescriptor.scriptSetup?.content
 
-      const oldImportedSymbols = new Set<string>() // "importee:symbol", where "symbol" can be "*" or identifier
-      for (const item of Object.values(oldDescriptor.scriptSetup?.imports ?? {})) {
-        oldImportedSymbols.add(`${item.source}:${item.imported}`)
-      }
+      const oldImportedSymbols = new Set<string>(Object.keys(old.compiledScript?.imports ?? {}))
+      // we currently not parsed the <script> blocks, and this check goes to patchCompiledScript
+      // (because parsing options is too complex)
 
       let op: 'reload' | 'rerender' | undefined
       if (scriptChanged || scriptSetupChanged) op = 'reload'
@@ -200,6 +211,7 @@ class State {
         oldDescriptor,
         newDescriptor,
         op,
+        importedSymbols: new Set(oldImportedSymbols),
       }
     }
 

@@ -22,7 +22,7 @@
                 <template #icon>
                     <DragDropIcon />
                 </template>
-                Pick Element
+                Pick Element ({{ MOD_KEY_LABEL }} + P)
             </Button>
 
             <Loading :indicator="!runtimeConnection.isConnected" size="small" />
@@ -35,7 +35,7 @@
 import { DragDropIcon, PlayCircleFilledIcon, RefreshIcon } from 'tdesign-icons-vue-next';
 import { Button, Loading, Tooltip } from 'tdesign-vue-next';
 import { ref } from 'vue';
-import { MOD_KEY_LABEL } from 'yon-utils'
+import { MOD_KEY_LABEL, modKey } from 'yon-utils'
 
 import { useRuntimeConnection } from '@/store/runtimeConnection';
 import { useBundlerController } from '@/store/bundler';
@@ -69,8 +69,9 @@ async function selectElementByClick() {
     isPickingElement.value = true
     try {
         const res = await runtimeConnection.api.selectElementByClick()
-        if (res) {
-            const { loc } = res
+        const node = res.nodes[0]
+        if (node) {
+            const { loc } = node
             const editorStore = useFileEditorStore()
             editorStore.openFileAndGoTo(loc.source, loc.start.line, loc.start.column, { line: loc.end.line, column: loc.end.column })
         }
@@ -78,6 +79,13 @@ async function selectElementByClick() {
         isPickingElement.value = false
     }
 }
+
+useEventListener(window, 'keydown', e => {
+    if (modKey(e) === modKey.Mod && e.code === 'KeyP') {
+        selectElementByClick()
+        e.preventDefault();
+    }
+})
 </script>
 
 <style lang="scss">

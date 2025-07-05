@@ -20,6 +20,7 @@ const actionHandlers = {
     // and replace the whole css
     builtChunkManager.getChunk('hmr').updateJS(opts.js)
     builtChunkManager.getChunk('user').updateCSS(opts.css)
+    builtChunkManager.getChunk('user').current.hmrPatched = true // next updateJS will force run
   },
   async selectElementByClick() {
     return await inspectorRuntimeApi.selectElementByClick()
@@ -48,6 +49,7 @@ class BuiltChunkMountPoint {
   current = vue.shallowReactive({
     css: '',
     js: '',
+    hmrPatched: false,  // if set, next updateJS will force run
     exports: null as any,   // js execution result
     exportsPromise: makePromise<any>(),
   })
@@ -67,7 +69,8 @@ class BuiltChunkMountPoint {
   #isFirstJsExecute = true
   updateJS(js: string) {
     const { current, name } = this
-    if (js === current.js) return null; // no change
+    if (!current.hmrPatched && js === current.js) return null; // no change, and previous updating is not HMR
+    current.hmrPatched = false
 
     const promise = this.#isFirstJsExecute ? current.exportsPromise : (current.exportsPromise = makePromise<any>());
     this.#isFirstJsExecute = false;
