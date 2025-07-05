@@ -31,7 +31,7 @@ export const useFileEditorStore = defineStore('editor', () => {
         }
 
         files.splice(0, files.length, ...root)
-    }, 100)
+    }, 100, { trailing: true })
 
     bundler.readyPromise.then(syncFiles)
 
