@@ -18,6 +18,12 @@
                 </template>
                 Refresh
             </Button>
+            <Button @click="selectElementByClick" :theme="isPickingElement? 'primary' : 'default'">
+                <template #icon>
+                    <DragDropIcon />
+                </template>
+                Pick Element
+            </Button>
 
             <Loading :indicator="!runtimeConnection.isConnected" size="small" />
         </div>
@@ -26,7 +32,7 @@
 </template>
 
 <script setup lang="ts">
-import { PlayCircleFilledIcon, RefreshIcon } from 'tdesign-icons-vue-next';
+import { DragDropIcon, PlayCircleFilledIcon, RefreshIcon } from 'tdesign-icons-vue-next';
 import { Button, Loading, Tooltip } from 'tdesign-vue-next';
 import { ref } from 'vue';
 import { MOD_KEY_LABEL } from 'yon-utils'
@@ -34,15 +40,15 @@ import { MOD_KEY_LABEL } from 'yon-utils'
 import { useRuntimeConnection } from '@/store/runtimeConnection';
 import { useBundlerController } from '@/store/bundler';
 import { useEventListener } from '@vueuse/core';
+import { useFileEditorStore } from '@/store/fileEditor';
 
 const bundler = useBundlerController();
 const runtimeConnection = useRuntimeConnection();
 
 const iframeRef = ref<HTMLIFrameElement>();
 function refresh() {
-    if (iframeRef.value) {
-        iframeRef.value.contentWindow?.location.reload();
-    }
+    isPickingElement.value = false
+    iframeRef.value?.contentWindow?.location.reload();
 }
 
 useEventListener(window, 'message', function handleGlobalMessage(e: MessageEvent) {
@@ -56,6 +62,21 @@ useEventListener(window, 'message', function handleGlobalMessage(e: MessageEvent
 
 function compile() {
     bundler.compile();
+}
+
+const isPickingElement = ref(false)
+async function selectElementByClick() {
+    isPickingElement.value = true
+    try {
+        const res = await runtimeConnection.api.selectElementByClick()
+        if (res) {
+            const { loc } = res
+            const editorStore = useFileEditorStore()
+            editorStore.openFileAndGoTo(loc.source, loc.start.line, loc.start.column, { line: loc.end.line, column: loc.end.column })
+        }
+    } finally {
+        isPickingElement.value = false
+    }
 }
 </script>
 

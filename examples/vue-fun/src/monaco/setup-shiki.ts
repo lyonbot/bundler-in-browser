@@ -7,6 +7,7 @@ import * as monaco from 'monaco-editor-core'
 import { createHighlighter } from 'shiki'
 
 // 创建一个可复用的语法高亮器
+// see https://textmate-grammars-themes.netlify.app/
 createHighlighter({
   themes: [
     'vitesse-dark',
@@ -35,7 +36,7 @@ createHighlighter({
   // 注册 Shiki 主题，并为 Monaco 提供语法高亮
   shikiToMonaco(highlighter, monaco)
 
-  monaco.editor.setTheme('vitesse-dark')
+  monaco.editor.setTheme('vitesse-light')
 
   // // 创建编辑器
   // const editor = monaco.editor.create(document.getElementById('container'), {

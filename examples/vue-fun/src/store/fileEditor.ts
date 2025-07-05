@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref, shallowReactive } from "vue";
 import { useBundlerController } from "./bundler";
 import { debounce } from "lodash-es";
+import * as monaco from "monaco-editor-core";
 
 export const useFileEditorStore = defineStore('editor', () => {
     const bundler = useBundlerController();
@@ -50,6 +51,31 @@ export const useFileEditorStore = defineStore('editor', () => {
         }
     }
 
+    async function openFileAndGoTo(path: string, line: number, column: number, selectTo?: { line: number, column: number }) {
+        openFile(path)
+        const editor = await new Promise<null | monaco.editor.ICodeEditor>((resolve) => {
+            let retryUntil = Date.now() + 1000
+            poll()
+            function poll() {
+                const editor = monaco.editor.getEditors().find(e => e.getModel()?.uri.path === path);
+                if (editor) return resolve(editor);
+
+                if (Date.now() < retryUntil) setTimeout(poll, 100);
+                else resolve(null);
+                return;
+            }
+        })
+        if (!editor) return;
+
+        editor.revealLineInCenter(line)
+        editor.focus()
+        if (selectTo) {
+            editor.setSelection(new monaco.Selection(line, column, selectTo.line, selectTo.column))
+        } else {
+            editor.setPosition({ lineNumber: line, column: column })
+        }
+    }
+
     return {
         activeFilePath,
         openedFiles,
@@ -66,6 +92,8 @@ export const useFileEditorStore = defineStore('editor', () => {
             await bundler.readyPromise
             return bundler.worker.api.writeFile(path, content)
         },
+
+        openFileAndGoTo,
     }
 })
 

@@ -3,6 +3,7 @@
 
 import * as shabbyVueHMRConsts from "@/abilities/shabby-vue-hmr/constants";
 import { ShabbyVueHMRRuntime } from "@/abilities/shabby-vue-hmr/for-runtime";
+import { inspectorRuntimeApi } from "@/abilities/vue-inspector/for-runtime";
 import * as vue from "vue";
 import { shallowRef } from "vue";
 import { createWorkerDispatcher, createWorkerHandler, makePromise } from "yon-utils";
@@ -20,12 +21,16 @@ const actionHandlers = {
     builtChunkManager.getChunk('hmr').updateJS(opts.js)
     builtChunkManager.getChunk('user').updateCSS(opts.css)
   },
+  async selectElementByClick() {
+    return await inspectorRuntimeApi.selectElementByClick()
+  },
 }
 
 
 export const editorApi = shallowRef<EditorActions>();
 export type EditorActions = {
   notifyReady(): Promise<void>
+  openFileAndGoTo(path: string, line: number, column: number, selectTo?: { line: number, column: number }): Promise<void>
 }
 
 //#region BuiltChunkManager and Vue HMR -------------------------------------------

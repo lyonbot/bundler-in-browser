@@ -4,6 +4,7 @@ import { defineStore } from "pinia";
 import { ref, watch } from "vue";
 import { createWorkerDispatcher, createWorkerHandler, makePromise } from "yon-utils";
 import { useBundlerController } from './bundler';
+import { useFileEditorStore } from './fileEditor';
 
 // this file run in editor
 //
@@ -12,9 +13,14 @@ import { useBundlerController } from './bundler';
 export const useRuntimeConnection = defineStore('runtimeConnection', () => {
   const isConnected = ref(false);
   const bundler = useBundlerController()
+  const editorStore = useFileEditorStore()
 
   const exposedApi: EditorActions = {
     notifyReady: () => Promise.resolve(), // overridden by setupConnection
+
+    async openFileAndGoTo(path: string, line: number, column: number, selectTo?: { line: number, column: number }) {
+      editorStore.openFileAndGoTo(path, line, column, selectTo)
+    },
   }
 
   let lastRetryTimer: any;
@@ -90,5 +96,11 @@ export const useRuntimeConnection = defineStore('runtimeConnection', () => {
     isConnected,
     setupConnection,
     runtime,
+    api: new Proxy({}, {
+      get: (_, key: keyof RuntimeActions) => {
+        // oxlint-disable-next-line no-unsafe-optional-chaining
+        return (...args: any[]) => (runtime.api?.[key] as any)(...args)
+      }
+    }) as RuntimeActions,
   }
 })

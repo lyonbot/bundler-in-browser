@@ -3,14 +3,14 @@ import { defineConfig } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
-import vueDevTools from 'vite-plugin-vue-devtools'
+// import vueDevTools from 'vite-plugin-vue-devtools'
 
 export default defineConfig({
   plugins: [
     UnoCSS(),
     vue(),
     vueJsx(),
-    vueDevTools(),
+    // vueDevTools(),
   ],
   base: './',
   define: {
@@ -21,7 +21,13 @@ export default defineConfig({
     format: 'es',
   },
   optimizeDeps: {
-    include: ['monaco-editor-core'],
+    include: [
+      'vscode-uri', 'monaco-editor-core',
+      'shiki', '@volar/monaco', '@volar/monaco/worker',
+      'monaco-editor-core/esm/vs/editor/editor.worker', '@vue/language-service',
+      'tdesign-vue-next', 'tdesign-icons-vue-next',
+      'typescript', 'sass',
+    ],
     exclude: ['@bundler-in-browser/*', 'bundler-in-browser']
   },
   resolve: {
