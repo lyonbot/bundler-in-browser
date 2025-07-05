@@ -3,7 +3,7 @@
 
 import * as shabbyVueHMRConsts from "@/abilities/shabby-vue-hmr/constants";
 import { ShabbyVueHMRRuntime } from "@/abilities/shabby-vue-hmr/for-runtime";
-import { inspectorRuntimeApi } from "@/abilities/vue-inspector/for-runtime";
+import { inspectorRuntimeApi, setInspectorEditorApiPort } from "@/abilities/vue-inspector/for-runtime";
 import * as vue from "vue";
 import { shallowRef } from "vue";
 import { createWorkerDispatcher, createWorkerHandler, makePromise } from "yon-utils";
@@ -22,17 +22,15 @@ const actionHandlers = {
     builtChunkManager.getChunk('user').updateCSS(opts.css)
     builtChunkManager.getChunk('user').current.hmrPatched = true // next updateJS will force run
   },
-  async selectElementByClick() {
-    return await inspectorRuntimeApi.selectElementByClick()
-  },
 }
 
 
-export const editorApi = shallowRef<EditorActions>();
 export type EditorActions = {
   notifyReady(): Promise<void>
   openFileAndGoTo(path: string, line: number, column: number, selectTo?: { line: number, column: number }): Promise<void>
 }
+export const editorApi = createWorkerDispatcher<EditorActions>((payload, transferable) => runtimeApiPort?.postMessage(payload, transferable))
+let runtimeApiPort: MessagePort | undefined
 
 //#region BuiltChunkManager and Vue HMR -------------------------------------------
 
@@ -195,6 +193,7 @@ export const builtChunkManager = createBuiltChunkManager()
 export type ConnectionEstablisher = {
   type: '__connect_vue_fun__'
   port: MessagePort
+  portForInspector: MessagePort
 }
 
 // handle connection from editor
@@ -203,17 +202,15 @@ self.addEventListener('message', function (e: MessageEvent) {
   const data = e.data as ConnectionEstablisher | undefined;
   if (data?.type !== '__connect_vue_fun__') return;
 
-  const port = data.port;
-  const handleActions = createWorkerHandler(actionHandlers);
-  port.onmessage = e => handleActions(e.data);
-  port.start();
+  runtimeApiPort?.close(); // close prev
+  runtimeApiPort = data.port;  // actions requested by editor
+  const handleRuntimeActions = createWorkerHandler(actionHandlers);
+  runtimeApiPort.onmessage = e => handleRuntimeActions(e.data);
+  runtimeApiPort.start();
 
-  const currentEditorApi = createWorkerDispatcher<EditorActions>((payload, transferable) => {
-    port.postMessage(payload, transferable);
-  })
+  setInspectorEditorApiPort(data.portForInspector)
 
-  editorApi.value = currentEditorApi;
-  currentEditorApi.notifyReady().then(() => {
+  editorApi.notifyReady().then(() => {
     console.log('editor connected')
   })
 })

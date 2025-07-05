@@ -25,5 +25,5 @@ export namespace InspectorRuntimeApi {
 
 /** RPC actions exposed from editor. can be invoked by runtime */
 export type InspectorEditorApi = {
-
+  setHoveringNode(data: InspectorRuntimeApi.PickResultNode | null): Promise<void>
 }

@@ -1,8 +1,10 @@
 import { defineStore } from "pinia";
-import { ref, shallowReactive } from "vue";
+import { computed, effectScope, onScopeDispose, ref, shallowReactive, watch, watchPostEffect } from "vue";
 import { useBundlerController } from "./bundler";
 import { debounce } from "lodash-es";
 import * as monaco from "monaco-editor-core";
+import { observeItems, reactiveMapOfSet } from "@/utils/reactive";
+import { head } from "yon-utils";
 
 export const useFileEditorStore = defineStore('editor', () => {
     const bundler = useBundlerController();
@@ -36,6 +38,13 @@ export const useFileEditorStore = defineStore('editor', () => {
     const activeFilePath = ref('')
     const openedFiles = ref<string[]>([])
 
+    const fileMarkers = reactiveMapOfSet<string, monaco.editor.IMarkerData>()
+    const fileDecorations = reactiveMapOfSet<string, monaco.editor.IModelDeltaDecoration>()
+    const pathToEditors = reactiveMapOfSet<string, monaco.editor.ICodeEditor>() // path -> editor
+
+    const monacoDisposables: monaco.IDisposable[] = []
+    onScopeDispose(() => monacoDisposables.forEach(f => f.dispose()))  // for vue-fun developing
+
     function openFile(path: string) {
         activeFilePath.value = path;
         if (!openedFiles.value.includes(path)) {
@@ -53,19 +62,8 @@ export const useFileEditorStore = defineStore('editor', () => {
 
     async function openFileAndGoTo(path: string, line: number, column: number, selectTo?: { line: number, column: number }) {
         openFile(path)
-        const editor = await new Promise<null | monaco.editor.ICodeEditor>((resolve) => {
-            let retryUntil = Date.now() + 1000
-            poll()
-            function poll() {
-                const editor = monaco.editor.getEditors().find(e => e.getModel()?.uri.path === path);
-                if (editor) return resolve(editor);
-
-                if (Date.now() < retryUntil) setTimeout(poll, 100);
-                else resolve(null);
-                return;
-            }
-        })
-        if (!editor) return;
+        const editor = await waitForEditor(path)
+        if (!editor) return
 
         editor.revealLineInCenter(line)
         editor.focus()
@@ -75,6 +73,72 @@ export const useFileEditorStore = defineStore('editor', () => {
             editor.setPosition({ lineNumber: line, column: column })
         }
     }
+
+    // observe all monaco editor, and auto update `pathToEditors`
+    monacoDisposables.push(monaco.editor.onDidCreateEditor(editor => {
+        const getCurrentPath = () => {
+            let uri = editor.getModel()?.uri
+            if (!uri || uri.scheme !== 'file') return null
+            return uri.path
+        }
+
+        let currentPath = getCurrentPath()
+        if (currentPath) pathToEditors.add(currentPath, editor)
+
+        editor.onDidChangeModel(() => {
+            const newPath = getCurrentPath()
+            if (newPath === currentPath) return
+            if (currentPath) pathToEditors.delete(currentPath, editor)
+            if (newPath) pathToEditors.add(newPath, editor)
+            currentPath = newPath
+        })
+
+        editor.onDidDispose(() => {
+            if (currentPath) pathToEditors.delete(currentPath, editor)
+        })
+    }))
+
+    /** wait until a editor is opened with `path` */
+    function waitForEditor(path: string, timeout = 1000) {
+        return new Promise<monaco.editor.ICodeEditor | null>((resolve) => {
+            let retryUntil = Date.now() + timeout
+            poll()
+            function poll() {
+                const editor = head(pathToEditors.values(path))
+                if (editor) return resolve(editor);
+
+                if (Date.now() < retryUntil) setTimeout(poll, 100);
+                else resolve(null);
+                return;
+            }
+        })
+    }
+
+    // observe all models and apply/update markers/decorations automatically
+    monacoDisposables.push(monaco.editor.onDidCreateModel(model => {
+        if (model.uri.scheme !== 'file') return
+
+        const path = model.uri.path
+        const scope = effectScope()
+
+        scope.run(() => watchPostEffect(() => {
+            const markers = fileMarkers.get(path)
+            monaco.editor.setModelMarkers(model, 'vue-fun', markers)
+        }))
+
+        scope.run(() => observeItems(
+            computed(() => pathToEditors.get(path)),
+            editor => {
+                // for each editor, sync decorations
+                const collection = editor.createDecorationsCollection()
+                watch(() => fileDecorations.get(path), decorations => {
+                    collection.set(decorations)
+                }, { immediate: true })
+            }
+        ))
+
+        model.onWillDispose(() => scope.stop())
+    }))
 
     return {
         activeFilePath,
@@ -92,6 +156,11 @@ export const useFileEditorStore = defineStore('editor', () => {
             await bundler.readyPromise
             return bundler.worker.api.writeFile(path, content)
         },
+
+        fileMarkers,
+        fileDecorations,
+        pathToEditors,
+        waitForEditor,
 
         openFileAndGoTo,
     }

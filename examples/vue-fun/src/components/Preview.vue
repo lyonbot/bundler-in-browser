@@ -18,7 +18,7 @@
                 </template>
                 Refresh
             </Button>
-            <Button @click="selectElementByClick" :theme="isPickingElement? 'primary' : 'default'">
+            <Button @click="selectElementByClick" :theme="isPickingElement ? 'primary' : 'default'">
                 <template #icon>
                     <DragDropIcon />
                 </template>
@@ -27,7 +27,9 @@
 
             <Loading :indicator="!runtimeConnection.isConnected" size="small" />
         </div>
-        <iframe src="previewer.html" frameborder="0" ref="iframeRef"></iframe>
+        <div class="preview-iframe-container">
+            <iframe src="previewer.html" frameborder="0" ref="iframeRef"></iframe>
+        </div>
     </div>
 </template>
 
@@ -68,7 +70,7 @@ const isPickingElement = ref(false)
 async function selectElementByClick() {
     isPickingElement.value = true
     try {
-        const res = await runtimeConnection.api.selectElementByClick()
+        const res = await runtimeConnection.inspectorApi.selectElementByClick()
         const node = res.nodes[0]
         if (node) {
             const { loc } = node
@@ -95,9 +97,15 @@ useEventListener(window, 'keydown', e => {
     height: 100%;
 }
 
-.preview-container iframe {
+.preview-iframe-container {
     flex: 1;
     contain: layout;
-    border: 0;
+    position: relative;
+
+    iframe {
+        border: 0;
+        width: 100%;
+        height: 100%;
+    }
 }
 </style>
