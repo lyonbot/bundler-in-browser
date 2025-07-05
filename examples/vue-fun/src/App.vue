@@ -39,7 +39,7 @@ readyPromise.then(async () => {
     @tailwind utilities;
     `.replace(/^\s+/gm, ''));
 
-  const sampleFiles = import.meta.glob('./sample-project/*', { import: 'default', query: 'raw' })
+  const sampleFiles = import.meta.glob('./sample-project/**/*', { import: 'default', query: 'raw' })
   for (const [file, loader] of Object.entries(sampleFiles)) {
     const source = await loader() as string
     const path = `/src/${file.slice('./sample-project/'.length)}`
