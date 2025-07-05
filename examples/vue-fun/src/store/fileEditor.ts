@@ -74,6 +74,22 @@ export const useFileEditorStore = defineStore('editor', () => {
         }
     }
 
+    /** wait until a editor is opened with `path` */
+    function waitForEditor(path: string, timeout = 1000) {
+        return new Promise<monaco.editor.ICodeEditor | null>((resolve) => {
+            let retryUntil = Date.now() + timeout
+            poll()
+            function poll() {
+                const editor = head(pathToEditors.values(path))
+                if (editor) return resolve(editor);
+
+                if (Date.now() < retryUntil) setTimeout(poll, 100);
+                else resolve(null);
+                return;
+            }
+        })
+    }
+
     // observe all monaco editor, and auto update `pathToEditors`
     monacoDisposables.push(monaco.editor.onDidCreateEditor(editor => {
         const getCurrentPath = () => {
@@ -97,22 +113,6 @@ export const useFileEditorStore = defineStore('editor', () => {
             if (currentPath) pathToEditors.delete(currentPath, editor)
         })
     }))
-
-    /** wait until a editor is opened with `path` */
-    function waitForEditor(path: string, timeout = 1000) {
-        return new Promise<monaco.editor.ICodeEditor | null>((resolve) => {
-            let retryUntil = Date.now() + timeout
-            poll()
-            function poll() {
-                const editor = head(pathToEditors.values(path))
-                if (editor) return resolve(editor);
-
-                if (Date.now() < retryUntil) setTimeout(poll, 100);
-                else resolve(null);
-                return;
-            }
-        })
-    }
 
     // observe all models and apply/update markers/decorations automatically
     monacoDisposables.push(monaco.editor.onDidCreateModel(model => {
@@ -138,6 +138,33 @@ export const useFileEditorStore = defineStore('editor', () => {
         ))
 
         model.onWillDispose(() => scope.stop())
+    }))
+
+    // support ctrl+click to open file
+    monacoDisposables.push(monaco.editor.registerEditorOpener({
+        openCodeEditor: async (source, resource, selectionOrPosition) => {
+            if (resource.scheme !== 'file') return false
+
+            const path = resource.path
+            if (path.startsWith('/node_modules/')) return false
+            openFile(path)
+
+            const editor = await waitForEditor(path)
+            if (!editor) return false
+
+            if (selectionOrPosition) {
+                if ('startLineNumber' in selectionOrPosition) {
+                    editor.setSelection(selectionOrPosition)
+                    editor.revealRangeInCenterIfOutsideViewport(selectionOrPosition)
+                } else {
+                    editor.setPosition(selectionOrPosition)
+                    editor.revealPositionInCenterIfOutsideViewport(selectionOrPosition)
+                }
+            }
+            editor.focus()
+
+            return true
+        }
     }))
 
     /**
@@ -192,7 +219,8 @@ export const useFileEditorStore = defineStore('editor', () => {
 
     async function updateFileContent(path: string, content: string) {
         await bundler.readyPromise;
-        return bundler.worker.api.writeFile(path, content);
+        const { isNewFile } = await bundler.worker.api.writeFile(path, content);
+        if (isNewFile) syncFiles()
     }
 
     return {

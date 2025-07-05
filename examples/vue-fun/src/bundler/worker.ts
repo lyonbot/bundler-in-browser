@@ -140,11 +140,15 @@ async function stat(path: string) {
 }
 
 async function writeFile(path: string, content: string | Uint8Array) {
-  const dir = dirname(path)
-  await fs.promises.mkdir(dir, { recursive: true })
+  const isNewFile = !await fs.promises.exists(path)
+  if (isNewFile) {
+    const dir = dirname(path)
+    await fs.promises.mkdir(dir, { recursive: true })
+  }
 
   await markFileAsModified(path)
   await fs.promises.writeFile(path, content);
+  return { isNewFile }
 }
 
 async function rm(path: string) {
