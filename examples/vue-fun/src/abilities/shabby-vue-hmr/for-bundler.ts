@@ -32,6 +32,28 @@ class State {
             throw new Error(`[vue-inspector] HMR patch failed: new import added: ${id}`)
           }
         }
+
+        // no new import, we replace the import statements
+        //
+        // FIXME: maybe string replacing is not safe
+        // FIXME: dynamic import???
+        compiledScript.content =
+          `import { ${importedSymbols.join(', ')} } from '${virtualPathInheritImportsPrefix}${hmrId}';`
+          + compiledScript.content.replace(
+            // comment out import statements with /* ... */
+            // dark regex supports:
+            //   import*as foo from "xxx"
+            //   import XXX,{yyy}from 
+            //   import XXX from "xxx"
+            //   import{yyy}from "xxx"
+            /\bimport(\s*\*\s*as\s+\S+\s+|\s+[^{\s,]+([,\s]+{[^}]*}|\s+)|\s*{[^}]+}\s*)from\s*('[^']+'|"[^"]+")/gm,
+            (matched) => {
+              if (importedSymbols.some(id => matched.includes(id))) {
+                return '/* ' + matched + ' */'
+              }
+              return matched   // not imported thing?
+            }
+          )
       }
       compiledScript.content += `
         import __vueShabbyHMRExtra from ${str(virtualPathRuntime)};
@@ -142,19 +164,14 @@ class State {
         }
       })
 
-      // replace imports to "vue-shabby-hmr:inherit:HMR_ID"
-      // to reuse (inherit) imported modules from existing instance
-      build.onResolve({ filter: /./ }, (args) => {
-        if (!/\.vue\?type=script/.test(args.importer)) return null;  // only handle imports from <script>
-        if (args.path === virtualPathRuntime) return null;  // no need for hmr runtime
-
-        const importer = args.importer?.replace(/\?.*/, '')
-        const sfc = vueFiles[importer]
-        if (!sfc) return null;
-
-        return {
-          external: true,
-          path: virtualPathInheritImportsPrefix + sfc.hmrId,
+      // resolve imports of "vue-shabby-hmr:inherit:HMR_ID" and "vue-shabby-hmr:runtime" 
+      // as external
+      build.onResolve({ filter: /./, namespace: 'sfc-script' }, (args) => {
+        if (args.path === virtualPathRuntime || args.path.startsWith(virtualPathInheritImportsPrefix)) {
+          return {
+            external: true,
+            path: args.path,
+          }
         }
       })
     }

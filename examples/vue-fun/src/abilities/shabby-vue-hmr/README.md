@@ -45,12 +45,17 @@ and **in the HMR patch**, all imports will be replaced:
 
 ```js
 // before:
+import * as lodash from "lodash";
 import { useLocalStorage } from "@vueuse/core";
 import { useStoreFoo } from "./stores/foo";
+import OtherComponent from "./OtherComponent.vue";
 
 // after:
-import { useLocalStorage } from "vue-shabby-hmr:inherit:HMR_ID";
-import { useStoreFoo } from "vue-shabby-hmr:inherit:HMR_ID";
+import { lodash, useLocalStorage, useStoreFoo, OtherComponent } from "vue-shabby-hmr:inherit:HMR_ID";
+/* import * as lodash from "lodash" */;
+/* import { useLocalStorage } from "@vueuse/core" */;
+/* import { useStoreFoo } from "./stores/foo" */;
+/* import OtherComponent from "./OtherComponent.vue" */;
 ```
 
 when HMR patch is applied, the `fakeRequire()` will handle the virtual path, and return the stored `{ useStoreFoo, useLocalStorage, ... }`
