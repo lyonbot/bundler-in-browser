@@ -2,9 +2,9 @@
 // setup highlight and theme
 //
 
-import { shikiToMonaco } from '@shikijs/monaco'
+import { shikiToMonaco, textmateThemeToMonacoTheme } from '@shikijs/monaco'
 import * as monaco from 'monaco-editor-core'
-import { createHighlighter } from 'shiki'
+import { createHighlighter, bundledThemes, normalizeTheme } from 'shiki'
 
 // 创建一个可复用的语法高亮器
 // see https://textmate-grammars-themes.netlify.app/
@@ -22,7 +22,7 @@ createHighlighter({
     'css',
     'scss'
   ],
-}).then((highlighter) => {
+}).then(async (highlighter) => {
 
   // 首先注册你需要的语言的 IDs
   monaco.languages.register({ id: 'vue', extensions: ['.vue'] })
@@ -38,11 +38,13 @@ createHighlighter({
 
   monaco.editor.setTheme('vitesse-light')
 
-  // // 创建编辑器
-  // const editor = monaco.editor.create(document.getElementById('container'), {
-  //   value: 'const a = 1',
-  //   language: 'javascript',
-  //   theme: 'vitesse-dark',
-  // })
+  // editor.lineHighlightBackground
+  // editor.selectionBackground
+  // editor.selectionHighlightBackground
 
+  // make the selection eye-catching
+  const theme = await bundledThemes['vitesse-light']().then(theme => theme.default)
+  const monacoTheme = textmateThemeToMonacoTheme(normalizeTheme(theme))
+  monacoTheme.colors['editor.selectionBackground'] = '#10b98166'
+  monaco.editor.defineTheme('vitesse-light', monacoTheme)
 })
