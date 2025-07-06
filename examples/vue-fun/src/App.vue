@@ -6,7 +6,7 @@
     <div class="flex-1 flex flex-col relative contain-size">
       <Editors />
     </div>
-    <div class="flex-1">
+    <div class="flex-1 z-100">  <!-- monaco overlay bug -->
       <Preview />
     </div>
   </div>

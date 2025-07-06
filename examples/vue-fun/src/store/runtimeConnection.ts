@@ -19,8 +19,8 @@ export const useRuntimeConnection = defineStore('runtimeConnection', () => {
   const editorApiForRuntime: EditorActions = {
     notifyReady: () => Promise.resolve(), // overridden by setupConnection
 
-    async openFileAndGoTo(path: string, line: number, column: number, selectTo?: { line: number, column: number }) {
-      editorStore.openFileAndGoTo(path, line, column, selectTo)
+    async openFileAndGoTo(path, positionOrRange) {
+      editorStore.openFileAndGoTo(path, positionOrRange)
     },
   }
 

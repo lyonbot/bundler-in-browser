@@ -102,6 +102,9 @@ importers:
       '@jridgewell/trace-mapping':
         specifier: ^0.3.29
         version: 0.3.29
+      '@popperjs/core':
+        specifier: ^2.11.8
+        version: 2.11.8
       '@unocss/reset':
         specifier: ^66.3.2
         version: 66.3.2

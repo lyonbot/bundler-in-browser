@@ -1,5 +1,5 @@
-import type { EffectScope, Ref } from "vue";
-import { effectScope, onScopeDispose, shallowReactive, watchEffect } from "vue";
+import type { EffectScope, MaybeRefOrGetter } from "vue";
+import { effectScope, onScopeDispose, shallowReactive, toValue, watchEffect } from "vue";
 
 /**
  * observe array, if new item added, create a EffectScope and run `mapFn`; if item is removed, the scope will be disposed (aka stopped).
@@ -11,7 +11,7 @@ import { effectScope, onScopeDispose, shallowReactive, watchEffect } from "vue";
  * null and undefined items are ignored.
  */
 export function observeItems<T>(
-    arrayRef: Ref<Iterable<T | null | undefined>>,
+    arrayRef: MaybeRefOrGetter<Iterable<T | null | undefined>>,
     effect: (item: T) => void
 ) {
     let records = new Map<T, {
@@ -20,7 +20,7 @@ export function observeItems<T>(
 
     const watcher = watchEffect(() => {
         const newRecords: typeof records = new Map();
-        for (const item of arrayRef.value) {
+        for (const item of toValue(arrayRef)) {
             if (item === null || item === undefined) continue; // More explicit null check
             if (newRecords.has(item)) continue; // already seen
 

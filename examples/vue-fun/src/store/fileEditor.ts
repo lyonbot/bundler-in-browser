@@ -1,10 +1,10 @@
-import { defineStore } from "pinia";
-import { computed, effectScope, onScopeDispose, ref, shallowReactive, watch, watchPostEffect } from "vue";
-import { useBundlerController } from "./bundler";
+import { observeItems, reactiveMapOfSet } from "@/utils/reactive";
 import { debounce } from "lodash-es";
 import * as monaco from "monaco-editor-core";
-import { observeItems, reactiveMapOfSet } from "@/utils/reactive";
+import { defineStore } from "pinia";
+import { effectScope, onScopeDispose, ref, shallowReactive, watch, watchPostEffect } from "vue";
 import { head } from "yon-utils";
+import { useBundlerController } from "./bundler";
 
 export const useFileEditorStore = defineStore('editor', () => {
     const bundler = useBundlerController();
@@ -60,18 +60,21 @@ export const useFileEditorStore = defineStore('editor', () => {
         }
     }
 
-    async function openFileAndGoTo(path: string, line: number, column: number, selectTo?: { line: number, column: number }) {
+    async function openFileAndGoTo(path: string, positionOrRange?: monaco.IPosition | monaco.IRange) {
         openFile(path)
         const editor = await waitForEditor(path)
         if (!editor) return
 
-        editor.revealLineInCenter(line)
-        editor.focus()
-        if (selectTo) {
-            editor.setSelection(new monaco.Selection(line, column, selectTo.line, selectTo.column))
-        } else {
-            editor.setPosition({ lineNumber: line, column: column })
+        if (positionOrRange) {
+            if ('lineNumber' in positionOrRange) {
+                editor.setPosition(positionOrRange)
+                editor.revealLineInCenterIfOutsideViewport(positionOrRange.lineNumber)
+            } else if ('startLineNumber' in positionOrRange) {
+                editor.setSelection(positionOrRange)
+                editor.revealRangeInCenterIfOutsideViewport(positionOrRange)
+            }
         }
+        editor.focus()
     }
 
     /** wait until a editor is opened with `path` */
@@ -119,7 +122,8 @@ export const useFileEditorStore = defineStore('editor', () => {
         if (model.uri.scheme !== 'file') return
 
         const path = model.uri.path
-        const scope = effectScope()
+        const scope = effectScope(true)
+        model.onWillDispose(() => scope.stop())
 
         scope.run(() => watchPostEffect(() => {
             const markers = fileMarkers.get(path)
@@ -127,7 +131,7 @@ export const useFileEditorStore = defineStore('editor', () => {
         }))
 
         scope.run(() => observeItems(
-            computed(() => pathToEditors.get(path)),
+            () => pathToEditors.get(path),
             editor => {
                 // for each editor, sync decorations
                 const collection = editor.createDecorationsCollection()
@@ -136,8 +140,6 @@ export const useFileEditorStore = defineStore('editor', () => {
                 }, { immediate: true })
             }
         ))
-
-        model.onWillDispose(() => scope.stop())
     }))
 
     // support ctrl+click to open file
@@ -183,7 +185,7 @@ export const useFileEditorStore = defineStore('editor', () => {
         const attached = ref(false)
 
         // this scope will dispose along with model
-        const scope = effectScope()
+        const scope = effectScope(true)
         model.onWillDispose(() => scope.stop())
         scope.run(() => {
             watchPostEffect(() => {

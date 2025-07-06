@@ -29,20 +29,23 @@
         </div>
         <div class="preview-iframe-container">
             <iframe src="previewer.html" frameborder="0" ref="iframeRef"></iframe>
+            <PreviewerPickResults :nodes="lastPickedResult" @close="lastPickedResult = []" />
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
 import { DragDropIcon, PlayCircleFilledIcon, RefreshIcon } from 'tdesign-icons-vue-next';
-import { Button, Loading, Tooltip } from 'tdesign-vue-next';
-import { ref } from 'vue';
+import { Button, Loading, Tooltip, DropdownMenu, DropdownItem, Popup } from 'tdesign-vue-next';
+import { ref, shallowRef, watchPostEffect } from 'vue';
 import { MOD_KEY_LABEL, modKey } from 'yon-utils'
 
 import { useRuntimeConnection } from '@/store/runtimeConnection';
 import { useBundlerController } from '@/store/bundler';
 import { useEventListener } from '@vueuse/core';
 import { useFileEditorStore } from '@/store/fileEditor';
+import type { InspectorRuntimeApi } from '@/abilities/vue-inspector/constants';
+import PreviewerPickResults from './PreviewerPickResults.vue';
 
 const bundler = useBundlerController();
 const runtimeConnection = useRuntimeConnection();
@@ -66,21 +69,36 @@ function compile() {
     bundler.compile();
 }
 
+const lastPickedResult = shallowRef<InspectorRuntimeApi.PickResultNode[]>([])
 const isPickingElement = ref(false)
 async function selectElementByClick() {
     isPickingElement.value = true
+    lastPickedResult.value = []
     try {
         const res = await runtimeConnection.inspectorApi.selectElementByClick()
+        lastPickedResult.value = res.nodes
         const node = res.nodes[0]
         if (node) {
             const { loc } = node
             const editorStore = useFileEditorStore()
-            editorStore.openFileAndGoTo(loc.source, loc.start.line, loc.start.column, { line: loc.end.line, column: loc.end.column })
+            editorStore.openFileAndGoTo(loc.source, {
+                startLineNumber: loc.start.line,
+                startColumn: loc.start.column,
+                endLineNumber: loc.end.line,
+                endColumn: loc.end.column,
+            })
         }
     } finally {
         isPickingElement.value = false
     }
 }
+
+watchPostEffect(() => {
+    // auto reset lastPickedResult when compiling start
+    if (lastPickedResult.value.length && bundler.isCompiling) {
+        lastPickedResult.value = []
+    }
+})
 
 useEventListener(window, 'keydown', e => {
     if (modKey(e) === modKey.Mod && e.code === 'KeyP') {

@@ -10,6 +10,7 @@
     "dependencies": {
         "@bundler-in-browser/tailwindcss": "workspace:^0.2.0",
         "@jridgewell/trace-mapping": "^0.3.29",
+        "@popperjs/core": "^2.11.8",
         "@unocss/reset": "^66.3.2",
         "@volar/language-service": "^2.4.15",
         "@volar/monaco": "^2.4.15",
