@@ -2,7 +2,7 @@ import { createWorkerDispatcher, createWorkerHandler, makePromise, type Imperati
 import { type InspectorRuntimeApi, type InspectorEditorApi } from "./constants"
 import { createApp, h, reactive, shallowReadonly, watchPostEffect } from "vue"
 import Overlay from "./runtime/Overlay.vue"
-import { getInspectorDataFromElement, toPickResultNode, type InspectorDataFromElement } from "./runtime/utils"
+import { getInspectorDataFromElement, toPickResultNodes, type InspectorDataFromElement } from "./runtime/utils"
 
 
 // ----------------------------------------------
@@ -22,7 +22,7 @@ createApp({
     watchPostEffect(() => {
       inspectorEditorApi.setHoveringNode(
         state.isCapturing
-          ? toPickResultNode(state.hoveringElement, state.hoveringInfo)
+          ? toPickResultNodes(state.hoveringElement, state.hoveringInfo)[0]
           : null
       )
     })
@@ -78,8 +78,8 @@ async function selectElementByClick() {
 
     let ptr = state.hoveringElement
     while (ptr) {
-      const item = toPickResultNode(ptr)
-      if (item) nodes.push(item)
+      const items = toPickResultNodes(ptr)
+      if (items.length) nodes.push(...items)
       ptr = ptr.parentElement
     }
 

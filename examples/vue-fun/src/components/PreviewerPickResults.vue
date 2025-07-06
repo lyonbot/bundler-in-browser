@@ -7,6 +7,7 @@ import * as monaco from 'monaco-editor-core';
 import { computed, ref, watchPostEffect } from 'vue';
 import { createPopper } from '@popperjs/core';
 import { useEventListener } from '@vueuse/core';
+import { Chart3DIcon, CodeIcon } from 'tdesign-icons-vue-next';
 
 const editorStore = useFileEditorStore()
 
@@ -99,9 +100,12 @@ function handleItemClick(e: MouseEvent, data: InspectorRuntimeApi.PickResultNode
   <div ref="anchorRef" style="position: absolute; left: 0; top: 0"></div>
   <div v-if="canDisplay" :class="$style.mask" @click="emits('close')"></div>
   <div v-if="canDisplay" :class="$style.wrapper" ref="wrapperRef">
-    <div v-for="node, idx in nodes" :key="idx" @mouseenter="handleItemMouseEnter($event, node)" :class="$style.item"
+    <div v-for="node, idx in nodes" :key="idx" :class="$style.item" @mouseenter="handleItemMouseEnter($event, node)"
       @click="handleItemClick($event, node)">
-      {{ node.type }} -
+
+      <CodeIcon v-if="node.type === 'node'" />
+      <Chart3DIcon v-if="node.type === 'component'" />
+
       {{ node.loc.source }} - {{ node.loc.start.line }}:{{ node.loc.start.column }}
     </div>
   </div>
@@ -111,6 +115,8 @@ function handleItemClick(e: MouseEvent, data: InspectorRuntimeApi.PickResultNode
 .wrapper {
   position: absolute;
   z-index: 100;
+  overflow: auto;
+  max-height: 30vh;
   @apply bg-white border border-gray-300 rounded-md shadow-lg;
   @apply animate-fade-in animate-duration-100;
 }

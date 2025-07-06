@@ -2,8 +2,8 @@
 // this file contains some useful vue stuff for development usage
 //
 
-import { type AttributeNode, type RootNode, type SourceLocation, type TemplateChildNode } from '@vue/compiler-core'
-import { ATTR_KEY, KEY_PROPS_DATA } from './constants'
+import { NodeTypes, type AttributeNode, type NodeTransform, type SourceLocation } from '@vue/compiler-core'
+import { ATTR_KEY, KEY_PROPS_DATA, VUE_INST_RENDERED_ROOT } from './constants'
 
 const EXCLUDE_TAG = ['template', 'script', 'style']
 
@@ -18,19 +18,34 @@ const getFakeLoc = (): SourceLocation => ({
  * 
  * use this in `templateCompilerOptions.nodeTransforms`
  */
-export const vueInspectorNodeTransform = (node: TemplateChildNode | RootNode, context: any) => {
+export const vueInspectorNodeTransform: NodeTransform = (node, context) => {
   const filename = context.filename
 
   if (node.type === 1) {
     if ((node.tagType === 0 || node.tagType === 1) && !EXCLUDE_TAG.includes(node.tag)) {
       const { line, column } = node.loc.start
       const { line: endLine, column: endColumn } = node.loc.end
+
+      let content = `${filename}:${line}:${column}-${endLine}:${endColumn}`
+
+      const isTopLevel = context.parent?.type === 0 satisfies NodeTypes.ROOT // direct child of <template>
+      if (isTopLevel) {
+        content += ',isRoot'
+        node.props.push({
+          type: 6 satisfies NodeTypes.ATTRIBUTE,
+          name: ATTR_KEY + '-isRoot',
+          value: undefined,
+          loc: getFakeLoc(),
+          nameLoc: getFakeLoc(),
+        })
+      }
+
       node.props.push({
-        type: 6,
+        type: 6 satisfies NodeTypes.ATTRIBUTE,
         name: ATTR_KEY,
         value: {
-          type: 2,
-          content: `${filename}:${line}:${column}-${endLine}:${endColumn}`,
+          type: 2 satisfies NodeTypes.TEXT,
+          content,
           loc: getFakeLoc(),
         },
         loc: getFakeLoc(),
@@ -67,6 +82,14 @@ function _interopVNode(vnode) {
     const data = vnode.props['${ATTR_KEY}']
     delete vnode.props['${ATTR_KEY}']
     Object.defineProperty(vnode.props, '${KEY_PROPS_DATA}', { value: data, enumerable: false })
+    
+    // if a component only have one root, the DOM element's __vnode is from the outer component's render
+    // to allow "getInspectorDataFromElement" dive into the innermost vnode (aka current)
+    // we mount this vnode to ctx.renderedRootVNode, where vnode.ctx === outerVNode.component
+    if ('${ATTR_KEY}-isRoot' in vnode.props) {
+      vnode.ctx["${VUE_INST_RENDERED_ROOT}"] = vnode
+      delete vnode.props['${ATTR_KEY}-isRoot']
+    }
   }
   return vnode
 }

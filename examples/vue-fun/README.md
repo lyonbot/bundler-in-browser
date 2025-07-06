@@ -83,7 +83,7 @@ basically borrowed idea and impl from [vue-inspector](https://github.com/webfans
 
   1. use `nodeTransforms` to inject attributes to each node.
   2. use `patchTemplateCompileResults` to patch `createElementVNode` and other functions, to hide attributes from DOM.
-  3. in runtime, use `getInspectorDataFromElement(el)` to retrieve the data like `/src/App.vue:3:5-5:10`
+  3. in runtime, use `getInspectorDataFromElement(el)` to retrieve the data of HTMLElement, including source location and whether is component's root nodes (direct child of `<template>`)
 
 - when bundler-in-browser compiles `<script>` of vue sfc:
 
