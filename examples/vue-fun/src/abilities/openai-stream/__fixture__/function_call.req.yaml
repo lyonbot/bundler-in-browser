@@ -1,0 +1,21 @@
+{
+  model: "gpt-4o",
+  messages: [{ role: "user", content: "write a poem about cat and send to printer" }],
+  tools:
+    [
+      {
+        type: "function",
+        function:
+          {
+            name: "print_poem",
+            description: "Print a poem line by line.",
+            parameters:
+              {
+                type: "object",
+                properties: { lines: { type: "array", items: { type: "string" } } },
+                required: ["lines"],
+              },
+          },
+      },
+    ],
+}

@@ -8,7 +8,7 @@ catalog:
   vite: ^6.3.5
   vite-plugin-dts: ^4.5.4
   vite-tsconfig-paths: ^5.1.4
-  vitest: ^3.2.4
+  vitest: 3.2.4
 
 overrides:
   volar-service-emmet: file:./overrides/volar-service-emmet

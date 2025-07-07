@@ -1,0 +1,15 @@
+data: {"choices":[{"delta":{"content":"Here's the classic \"Hello World\" program in Python:\n\n```python\nprint(\"Hello, World!\")\n```\n\n###","role":"assistant"},"index":0}],"created":1751905627,"id":"WvVraNyKPPH5qtsPm9-sAQ","model":"gemini-2.5-flash","object":"chat.completion.chunk"}
+
+data: {"choices":[{"delta":{"content":" How to Run It:\n\n1.  **Save the code:** Open a text editor (like Notepad on Windows, TextEdit on Mac, or any code editor like VS Code, Sublime Text, Atom). Copy and paste the line `print(\"Hello, World","role":"assistant"},"index":0}],"created":1751905627,"id":"WvVraNyKPPH5qtsPm9-sAQ","model":"gemini-2.5-flash","object":"chat.completion.chunk"}
+
+data: {"choices":[{"delta":{"content":"!\")` into the editor. Save the file with a `.py` extension, for example, `hello.py`.\n\n2.  **Open your terminal/command prompt:**\n    *   **Windows:** Search for \"cmd\" or \"","role":"assistant"},"index":0}],"created":1751905628,"id":"WvVraNyKPPH5qtsPm9-sAQ","model":"gemini-2.5-flash","object":"chat.completion.chunk"}
+
+data: {"choices":[{"delta":{"content":"PowerShell\" in the Start menu.\n    *   **Mac/Linux:** Search for \"Terminal\" in your applications.\n\n3.  **Navigate to the directory:** Use the `cd` command to go to the directory where you saved","role":"assistant"},"index":0}],"created":1751905628,"id":"WvVraNyKPPH5qtsPm9-sAQ","model":"gemini-2.5-flash","object":"chat.completion.chunk"}
+
+data: {"choices":[{"delta":{"content":" your `hello.py` file. For example, if you saved it in a folder called `my_python_programs` on your desktop, you might type:\n    ```bash\n    cd Desktop/my_python_programs","role":"assistant"},"index":0}],"created":1751905628,"id":"WvVraNyKPPH5qtsPm9-sAQ","model":"gemini-2.5-flash","object":"chat.completion.chunk"}
+
+data: {"choices":[{"delta":{"content":"\n    ```\n\n4.  **Run the program:** Once you're in the correct directory, type:\n    ```bash\n    python hello.py\n    ```\n    (On some systems, you might need to use `python3`","role":"assistant"},"index":0}],"created":1751905628,"id":"WvVraNyKPPH5qtsPm9-sAQ","model":"gemini-2.5-flash","object":"chat.completion.chunk"}
+
+data: {"choices":[{"delta":{"content":" instead of `python` if you have multiple Python versions installed).\n\n### Expected Output:\n\n```\nHello, World!\n```","role":"assistant"},"finish_reason":"stop","index":0}],"created":1751905628,"id":"WvVraNyKPPH5qtsPm9-sAQ","model":"gemini-2.5-flash","object":"chat.completion.chunk"}
+
+data: [DONE]

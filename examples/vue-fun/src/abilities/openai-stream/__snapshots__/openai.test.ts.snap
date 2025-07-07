@@ -1,0 +1,75 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`openai > function_call 1`] = `
+[
+  {
+    "completed": true,
+    "content": {
+      "function": {
+        "arguments": "{"lines":["In a sunlit room, a cat does lie,","With a gentle purr and a sleepy eye.","Soft fur gleams in the afternoon light,","A creature of grace, a pure delight.","","Whiskers twitch in a playful dream,","Chasing shadows in a moonlit beam.","Paws tucked close, a curled-up ball,","In slumber deep, heed nature's call.","","A leap, a bound, through gardens fair,","With stealthy grace, the cat is there.","A hunter's heart in a playful chase,","In every move, a hint of grace.","","Eyes like emeralds, bright and wise,","Reflecting the world, capturing skies.","A feline friend, in joy and jest,","In quiet moments, they find their rest.","","Oh, gentle cat, with spirit free,","In your presence, peace and glee.","A purr, a meow, a soft embrace,","In your company, we find our space."]}",
+        "name": "print_poem",
+      },
+      "id": "call_lCRDgpJssgwhEOV7k2Dkg2lv",
+      "index": 0,
+    },
+    "type": "function",
+  },
+]
+`;
+
+exports[`openai > regular 1`] = `
+[
+  {
+    "completed": true,
+    "content": "Here's the classic "Hello World" program in Python:
+
+",
+    "type": "text",
+  },
+  {
+    "completed": true,
+    "content": "print("Hello, World!")
+",
+    "language": "python",
+    "type": "code",
+  },
+  {
+    "completed": true,
+    "content": "### How to Run It:
+
+1.  **Save the code:** Open a text editor (like Notepad on Windows, TextEdit on Mac, or any code editor like VS Code, Sublime Text, Atom). Copy and paste the line \`print("Hello, World!")\` into the editor. Save the file with a \`.py\` extension, for example, \`hello.py\`.
+
+2.  **Open your terminal/command prompt:**
+    *   **Windows:** Search for "cmd" or "PowerShell" in the Start menu.
+    *   **Mac/Linux:** Search for "Terminal" in your applications.
+
+3.  **Navigate to the directory:** Use the \`cd\` command to go to the directory where you saved your \`hello.py\` file. For example, if you saved it in a folder called \`my_python_programs\` on your desktop, you might type:
+    \`\`\`bash
+    cd Desktop/my_python_programs
+    \`\`\`
+
+4.  **Run the program:** Once you're in the correct directory, type:
+    \`\`\`bash
+    python hello.py
+    \`\`\`
+    (On some systems, you might need to use \`python3\` instead of \`python\` if you have multiple Python versions installed).
+
+### Expected Output:
+
+",
+    "type": "text",
+  },
+  {
+    "completed": true,
+    "content": "Hello, World!
+",
+    "language": "",
+    "type": "code",
+  },
+  {
+    "completed": true,
+    "content": "",
+    "type": "text",
+  },
+]
+`;
