@@ -10,8 +10,9 @@ import { useEventListener } from '@vueuse/core';
 import { Chart3DFilledIcon, CodeIcon } from 'tdesign-icons-vue-next';
 import { basename } from 'path';
 import MonacoEditor from '@/monaco/MonacoEditor.vue';
-import { type Nil, type RectLike } from 'yon-utils';
+import { delay, type Nil, type RectLike } from 'yon-utils';
 import { useRuntimeConnection } from '@/store/runtimeConnection';
+import { retryUntil } from '@/utils/retry';
 
 const editorStore = useFileEditorStore()
 const runtimeConnection = useRuntimeConnection()
@@ -116,9 +117,16 @@ function handleItemClick(e: MouseEvent, data: InspectorRuntimeApi.PickResultNode
     endLineNumber: data.loc.end.line,
     endColumn: data.loc.end.column,
   };
-  editorStore.openFileAndGoTo(data.loc.source, range)
-  monacoEditor?.revealRangeInCenterIfOutsideViewport(range)
   e.preventDefault()
+  editorStore.openFileAndGoTo(data.loc.source, range)
+  retryUntil(() => monacoEditor?.getModel()?.uri.path === data.loc.source)
+    .then((good) => {
+      if (!good) return
+      monacoEditor?.revealPositionNearTop({
+        lineNumber: data.loc.start.line,
+        column: data.loc.start.column,
+      })
+    })
 }
 
 const monacoOptions: monaco.editor.IEditorConstructionOptions = {
@@ -144,6 +152,8 @@ function handleMonacoReady(editor: monaco.editor.IStandaloneCodeEditor) {
       endColumn: loc.end.column,
     })
   }
+
+  editor.isPreviewerPickEditor = true
 
   // FIXME: too ugly way to sync position to other editors
   editor.onDidChangeCursorPosition(e => {
@@ -174,9 +184,8 @@ watch(     // auto select the node by current active editor's position
       n.loc.end.line,
       n.loc.end.column,
     ).containsPosition(pos))
-    if (!node) return
 
-    lastClickedNode.value = node
+    lastClickedNode.value = node || nodes[0]
   },
 )
 </script>

@@ -3,8 +3,8 @@ import { debounce } from "lodash-es";
 import * as monaco from "monaco-editor-core";
 import { defineStore } from "pinia";
 import { effectScope, onScopeDispose, ref, shallowReactive, watch, watchPostEffect } from "vue";
-import { head } from "yon-utils";
 import { useBundlerController } from "./bundler";
+import { retryUntil } from "@/utils/retry";
 
 export const useFileEditorStore = defineStore('editor', () => {
     const bundler = useBundlerController();
@@ -78,19 +78,10 @@ export const useFileEditorStore = defineStore('editor', () => {
     }
 
     /** wait until a editor is opened with `path` */
-    function waitForEditor(path: string, timeout = 1000) {
-        return new Promise<monaco.editor.ICodeEditor | null>((resolve) => {
-            let retryUntil = Date.now() + timeout
-            poll()
-            function poll() {
-                const editor = head(pathToEditors.values(path))
-                if (editor) return resolve(editor);
-
-                if (Date.now() < retryUntil) setTimeout(poll, 100);
-                else resolve(null);
-                return;
-            }
-        })
+    async function waitForEditor(path: string, timeout = 1000) {
+        return await retryUntil(() => {
+            return pathToEditors.get(path).find(m => !m.isPreviewerPickEditor)
+        }, timeout)
     }
 
     // observe all monaco editor, and auto update `pathToEditors`
@@ -155,13 +146,30 @@ export const useFileEditorStore = defineStore('editor', () => {
             if (!editor) return false
 
             if (selectionOrPosition) {
+                let range: monaco.IRange
                 if ('startLineNumber' in selectionOrPosition) {
                     editor.setSelection(selectionOrPosition)
                     editor.revealRangeInCenterIfOutsideViewport(selectionOrPosition)
+                    range = selectionOrPosition
                 } else {
                     editor.setPosition(selectionOrPosition)
                     editor.revealPositionInCenterIfOutsideViewport(selectionOrPosition)
+                    range = {
+                        startLineNumber: selectionOrPosition.lineNumber,
+                        startColumn: selectionOrPosition.column,
+                        endLineNumber: selectionOrPosition.lineNumber,
+                        endColumn: selectionOrPosition.column,
+                    }
                 }
+
+                const tempDecorations: monaco.editor.IModelDeltaDecoration = {
+                    range,
+                    options: {
+                        className: 'monaco-jumpHintDecorator',
+                    }
+                }
+                fileDecorations.add(path, tempDecorations)
+                setTimeout(() => fileDecorations.delete(path, tempDecorations), 500)
             }
             editor.focus()
 

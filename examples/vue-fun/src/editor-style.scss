@@ -1,3 +1,10 @@
 .monaco-inspectorHoveringDecorator {
     background-color: #fcd34d66;
 }
+
+.monaco-jumpHintDecorator {
+    background-color: #fcd34d66;
+    outline: 2px solid #fcd34d;
+    outline-offset: 2px;
+    border-radius: 4px;
+}

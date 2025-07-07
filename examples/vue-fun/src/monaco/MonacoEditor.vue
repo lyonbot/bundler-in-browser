@@ -6,7 +6,7 @@
 import { useFileEditorStore } from "@/store/fileEditor";
 import { random } from "lodash-es";
 import * as monaco from "monaco-editor-core";
-import { onMounted, onUnmounted, ref, watch, watchEffect } from "vue";
+import { onMounted, onScopeDispose, onUnmounted, ref, watch, watchEffect } from "vue";
 import type { Nil } from "yon-utils";
 import "./setup";
 
@@ -74,12 +74,20 @@ watch(() => props.path, (path, _, onCleanup) => {
 }, { immediate: true })
 
 onMounted(() => {
+  const overflowWrapper = document.createElement('div')
+  overflowWrapper.className = 'monaco-editor'  // https://github.com/microsoft/monaco-editor/issues/2233
+  overflowWrapper.style.cssText = 'position: fixed; left: 0; top: 0; z-index: 100;'
+  document.body.appendChild(overflowWrapper)
+  onScopeDispose(() => overflowWrapper.remove())
+  const overflowWidgetsDomNode = overflowWrapper.appendChild(document.createElement('div'))
+
   // Initialize Monaco Editor
   editor = monaco.editor.create(editorContainer.value!, {
     // value: props.modelValue,
     // language: props.language,
     model: currentModel,
     automaticLayout: true,
+    overflowWidgetsDomNode,
     fixedOverflowWidgets: true,
     autoClosingBrackets: 'always',
     autoClosingDelete: 'always',
