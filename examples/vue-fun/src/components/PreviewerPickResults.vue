@@ -7,7 +7,8 @@ import * as monaco from 'monaco-editor-core';
 import { computed, ref, watchPostEffect } from 'vue';
 import { createPopper } from '@popperjs/core';
 import { useEventListener } from '@vueuse/core';
-import { Chart3DIcon, CodeIcon } from 'tdesign-icons-vue-next';
+import { Chart3DFilledIcon, Chart3DIcon, CodeIcon } from 'tdesign-icons-vue-next';
+import { basename } from 'path';
 
 const editorStore = useFileEditorStore()
 
@@ -100,13 +101,16 @@ function handleItemClick(e: MouseEvent, data: InspectorRuntimeApi.PickResultNode
   <div ref="anchorRef" style="position: absolute; left: 0; top: 0"></div>
   <div v-if="canDisplay" :class="$style.mask" @click="emits('close')"></div>
   <div v-if="canDisplay" :class="$style.wrapper" ref="wrapperRef">
-    <div v-for="node, idx in nodes" :key="idx" :class="$style.item" @mouseenter="handleItemMouseEnter($event, node)"
-      @click="handleItemClick($event, node)">
+    <div v-for="node, idx in nodes" :key="idx" :class="{
+      [$style.item]: true,
+      [$style.componentItem]: node.type === 'component',
+    }" @mouseenter="handleItemMouseEnter($event, node)" @click="handleItemClick($event, node)">
 
-      <CodeIcon v-if="node.type === 'node'" />
-      <Chart3DIcon v-if="node.type === 'component'" />
+      <CodeIcon class="self-center" v-if="node.type === 'node'" />
+      <Chart3DFilledIcon class="self-center text-emerald-600" v-if="node.type === 'component'" />
 
-      {{ node.loc.source }} - {{ node.loc.start.line }}:{{ node.loc.start.column }}
+      <span class="text-sm">{{ basename(node.loc.source) }}</span>
+      <span class="text-xs op-50">{{ node.loc.start.line }}:{{ node.loc.start.column }}</span>
     </div>
   </div>
 </template>
@@ -123,6 +127,13 @@ function handleItemClick(e: MouseEvent, data: InspectorRuntimeApi.PickResultNode
 
 .item {
   @apply px-2 py-1 text-gray-700 hover:bg-gray-100 cursor-pointer;
+  @apply flex items-baseline gap-1;
+
+  &.componentItem {
+    @apply text-emerald-800 b-b b-b-solid b-b-emerald-200;
+    @apply bg-gradient-from-white to-emerald-50 bg-gradient-to-b;
+    @apply hover:bg-gradient-from-emerald-50 hover:to-emerald-100;
+  }
 }
 
 .mask {

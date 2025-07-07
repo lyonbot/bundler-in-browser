@@ -25,9 +25,10 @@ export const VUE_INST_RENDERED_ROOT = 'renderedRootVNode'
 /** RPC actions exposed from runtime. can be invoked by editor */
 export type InspectorRuntimeApi = {
   selectElementByClick(): Promise<{
-    clientX: number,
-    clientY: number,
+    nodes: Array<InspectorRuntimeApi.PickResultNode>
+  }>
 
+  selectElementBySelector(selector: string): Promise<{
     nodes: Array<InspectorRuntimeApi.PickResultNode>
   }>
 }
@@ -36,6 +37,7 @@ export namespace InspectorRuntimeApi {
   export type PickResultNode = {
     rect: { left: number, top: number, width: number, height: number },
     type: 'node' | 'component',
+    selector: string, // unique selector for this node
     loc: {
       start: { line: number, column: number },
       end: { line: number, column: number },

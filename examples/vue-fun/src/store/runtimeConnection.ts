@@ -2,7 +2,7 @@ import type { ConnectionEstablisher, EditorActions, RuntimeActions } from '@/pre
 import * as monaco from 'monaco-editor-core';
 import { defineStore } from "pinia";
 import { ref, watch } from "vue";
-import { createWorkerDispatcher, createWorkerHandler, makePromise } from "yon-utils";
+import { createWorkerDispatcher, createWorkerHandler, makePromise, MOD_KEY } from "yon-utils";
 import { useBundlerController } from './bundler';
 import { useFileEditorStore } from './fileEditor';
 import type { InspectorEditorApi, InspectorRuntimeApi } from '@/abilities/vue-inspector/constants';
@@ -21,6 +21,16 @@ export const useRuntimeConnection = defineStore('runtimeConnection', () => {
 
     async openFileAndGoTo(path, positionOrRange) {
       editorStore.openFileAndGoTo(path, positionOrRange)
+    },
+
+    async onModPPressed() {
+      //FIXME: decouple from ../components/Preview.vue
+      const ev = new KeyboardEvent('keydown', {
+        key: 'p',
+        code: 'KeyP',
+        [MOD_KEY]: true,
+      })
+      window.dispatchEvent(ev)
     },
   }
 

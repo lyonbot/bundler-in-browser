@@ -6,7 +6,7 @@ import { ShabbyVueHMRRuntime } from "@/abilities/shabby-vue-hmr/for-runtime";
 import { setInspectorEditorApiPort } from "@/abilities/vue-inspector/for-runtime";
 import type { IPosition, IRange } from "monaco-editor-core";
 import * as vue from "vue";
-import { createWorkerDispatcher, createWorkerHandler, makePromise } from "yon-utils";
+import { createWorkerDispatcher, createWorkerHandler, makePromise, modKey } from "yon-utils";
 
 export type RuntimeActions = typeof actionHandlers
 const actionHandlers = {
@@ -28,9 +28,23 @@ const actionHandlers = {
 export type EditorActions = {
   notifyReady(): Promise<void>
   openFileAndGoTo(path: string, positionOrRange?: IPosition | IRange): Promise<void>
+  onModPPressed(): Promise<void>  // Mod+P to pick elements
 }
 export const editorApi = createWorkerDispatcher<EditorActions>((payload, transferable) => runtimeApiPort?.postMessage(payload, transferable))
 let runtimeApiPort: MessagePort | undefined
+
+//#region Global KeyListener -------------------------------------------
+
+window.addEventListener('keydown', e => {
+  if (modKey(e) === modKey.Mod && e.code === 'KeyP') {
+    e.preventDefault()
+    e.stopPropagation()
+    editorApi.onModPPressed()
+    return
+  }
+}, true)
+
+//#endregion
 
 //#region BuiltChunkManager and Vue HMR -------------------------------------------
 

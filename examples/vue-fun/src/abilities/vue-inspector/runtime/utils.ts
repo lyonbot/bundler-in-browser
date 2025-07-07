@@ -1,3 +1,4 @@
+import { elToSelector } from "@/utils/selector"
 import { KEY_PROPS_DATA, VUE_INST_RENDERED_ROOT, type InspectorRuntimeApi } from "../constants"
 
 /**
@@ -70,10 +71,12 @@ export function toPickResultNodes(el: HTMLElement | null | undefined, info = get
 
     const { left, top, width, height } = el.getBoundingClientRect()
     const results: InspectorRuntimeApi.PickResultNode[] = []
+    const selector = elToSelector(el)
 
     results.push({
         rect: { left, top, width, height },
         type: 'node',
+        selector,
         loc: {
             start: { line: info.start.line, column: info.start.column },
             end: { line: info.end.line, column: info.end.column },
@@ -92,6 +95,7 @@ export function toPickResultNodes(el: HTMLElement | null | undefined, info = get
             results.push({
                 rect: { left, top, width, height },
                 type: 'component',
+                selector,
                 loc: {
                     start: { line: parentInfo.start.line, column: parentInfo.start.column },
                     end: { line: parentInfo.end.line, column: parentInfo.end.column },

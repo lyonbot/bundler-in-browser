@@ -34,6 +34,28 @@ createApp({
   },
 }).mount(appContainer)
 
+function toPickResultNodesWithAncestors(el: HTMLElement | null | undefined) {
+  const nodes: InspectorRuntimeApi.PickResultNode[] = []
+  let ptr = el
+  while (ptr) {
+    const items = toPickResultNodes(ptr)
+    if (items.length) nodes.push(...items)
+    ptr = ptr.parentElement
+  }
+  return nodes
+}
+
+async function selectElementBySelector(selector: string | HTMLElement) {
+  const el = typeof selector === 'string' ? document.querySelector(selector) as HTMLElement : selector
+  const nodes = toPickResultNodesWithAncestors(el)
+  state.isCapturing = false
+  state.hoveringElement = el
+  state.hoveringInfo = nodes[0]?.loc
+
+  selectingPromise?.resolve({ nodes })
+  return { nodes }
+}
+
 async function selectElementByClick() {
   if (selectingPromise) return selectingPromise  // already selecting
 
@@ -74,18 +96,8 @@ async function selectElementByClick() {
     e.preventDefault();
     e.stopPropagation();
 
-    const nodes: InspectorRuntimeApi.PickResultNode[] = []
-
-    let ptr = state.hoveringElement
-    while (ptr) {
-      const items = toPickResultNodes(ptr)
-      if (items.length) nodes.push(...items)
-      ptr = ptr.parentElement
-    }
-
+    const nodes = toPickResultNodesWithAncestors(state.hoveringElement)
     promise.resolve({
-      clientX: e.clientX,
-      clientY: e.clientY,
       nodes
     })
   }
@@ -122,6 +134,7 @@ export const inspectorState = shallowReadonly(state)
 
 export const inspectorRuntimeApi: InspectorRuntimeApi = {
   selectElementByClick,
+  selectElementBySelector,
 }
 
 export const inspectorEditorApi = createWorkerDispatcher<InspectorEditorApi>(

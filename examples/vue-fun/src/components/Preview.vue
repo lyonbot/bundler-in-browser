@@ -29,7 +29,7 @@
         </div>
         <div class="preview-iframe-container">
             <iframe src="previewer.html" frameborder="0" ref="iframeRef"></iframe>
-            <PreviewerPickResults :nodes="lastPickedResult" @close="lastPickedResult = []" />
+            <PreviewerPickResults :nodes="lastPickedResult" @close="manualClosePickResults" />
         </div>
     </div>
 </template>
@@ -37,7 +37,7 @@
 <script setup lang="ts">
 import { DragDropIcon, PlayCircleFilledIcon, RefreshIcon } from 'tdesign-icons-vue-next';
 import { Button, Loading, Tooltip, DropdownMenu, DropdownItem, Popup } from 'tdesign-vue-next';
-import { ref, shallowRef, watchPostEffect } from 'vue';
+import { ref, shallowRef, watch, watchPostEffect } from 'vue';
 import { MOD_KEY_LABEL, modKey } from 'yon-utils'
 
 import { useRuntimeConnection } from '@/store/runtimeConnection';
@@ -46,6 +46,7 @@ import { useEventListener } from '@vueuse/core';
 import { useFileEditorStore } from '@/store/fileEditor';
 import type { InspectorRuntimeApi } from '@/abilities/vue-inspector/constants';
 import PreviewerPickResults from './PreviewerPickResults.vue';
+import { retryUntil } from '@/utils/retry';
 
 const bundler = useBundlerController();
 const runtimeConnection = useRuntimeConnection();
@@ -93,12 +94,36 @@ async function selectElementByClick() {
     }
 }
 
-watchPostEffect(() => {
-    // auto reset lastPickedResult when compiling start
-    if (lastPickedResult.value.length && bundler.isCompiling) {
-        lastPickedResult.value = []
+let autoRestoreSelector: string | undefined
+watch(
+    () => bundler.isCompiling,
+    (isCompiling) => {
+        if (isCompiling) {
+            // auto reset lastPickedResult when compiling start
+            autoRestoreSelector ||= lastPickedResult.value[0]?.selector
+            lastPickedResult.value = []
+        } else {
+            // and recover when finished
+            const selector = autoRestoreSelector
+            autoRestoreSelector = undefined
+            if (selector) {
+                retryUntil(async () => {
+                    const res = await runtimeConnection.inspectorApi.selectElementBySelector(selector)
+                    if (!res.nodes.length) return false;
+
+                    lastPickedResult.value = res.nodes;
+                    return true;
+                }).then(ok => {
+                    if (!ok) lastPickedResult.value = []
+                })
+            }
+        }
     }
-})
+)
+function manualClosePickResults() {
+    lastPickedResult.value = []
+    autoRestoreSelector = undefined
+}
 
 useEventListener(window, 'keydown', e => {
     if (modKey(e) === modKey.Mod && e.code === 'KeyP') {
