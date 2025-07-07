@@ -69,12 +69,12 @@ export interface InspectorDataFromElement {
 export function toPickResultNodes(el: HTMLElement | null | undefined, info = getInspectorDataFromElement(el)): InspectorRuntimeApi.PickResultNode[] {
     if (!el || !info) return []
 
-    const { left, top, width, height } = el.getBoundingClientRect()
+    const { x, y, width, height } = el.getBoundingClientRect()
     const results: InspectorRuntimeApi.PickResultNode[] = []
     const selector = elToSelector(el)
 
     results.push({
-        rect: { left, top, width, height },
+        rect: { x, y, width, height },
         type: 'node',
         selector,
         loc: {
@@ -93,7 +93,7 @@ export function toPickResultNodes(el: HTMLElement | null | undefined, info = get
             if (!parentInfo) break
 
             results.push({
-                rect: { left, top, width, height },
+                rect: { x, y, width, height },
                 type: 'component',
                 selector,
                 loc: {
@@ -110,4 +110,15 @@ export function toPickResultNodes(el: HTMLElement | null | undefined, info = get
     }
 
     return results
+}
+
+export function toPickResultNodesWithAncestors(el: HTMLElement | null | undefined) {
+  const nodes: InspectorRuntimeApi.PickResultNode[] = []
+  let ptr = el
+  while (ptr) {
+    const items = toPickResultNodes(ptr)
+    if (items.length) nodes.push(...items)
+    ptr = ptr.parentElement
+  }
+  return nodes
 }

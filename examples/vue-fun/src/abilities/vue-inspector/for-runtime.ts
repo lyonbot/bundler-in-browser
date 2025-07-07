@@ -1,20 +1,30 @@
 import { createWorkerDispatcher, createWorkerHandler, makePromise, type ImperativePromiseEx } from "yon-utils"
 import { type InspectorRuntimeApi, type InspectorEditorApi } from "./constants"
-import { createApp, h, reactive, shallowReadonly, watchPostEffect } from "vue"
+import { createApp, h, reactive, shallowReadonly, shallowRef, watchPostEffect } from "vue"
 import Overlay from "./runtime/Overlay.vue"
-import { getInspectorDataFromElement, toPickResultNodes, type InspectorDataFromElement } from "./runtime/utils"
-
+import { getInspectorDataFromElement, toPickResultNodes, toPickResultNodesWithAncestors, type InspectorDataFromElement } from "./runtime/utils"
 
 // ----------------------------------------------
-// #region runtime api
+// these apis can be remote-invoked by editor
 
-let selectingPromise: undefined | ImperativePromiseEx<Awaited<ReturnType<InspectorRuntimeApi['selectElementByClick']>>>
-let state = reactive({
+export const inspectorRuntimeApi: InspectorRuntimeApi = {
+  selectElementByClick,
+  selectElementBySelector,
+  queryElementRect,
+}
+
+// ----------------------------------------------
+// #region runtime
+
+const state = reactive({
   isCapturing: false,
   hoveringElement: null as HTMLElement | null,
   hoveringInfo: null as InspectorDataFromElement | null,
   selectElementByClick,
+  selectingPromise: shallowRef<undefined | ImperativePromiseEx<Awaited<ReturnType<InspectorRuntimeApi['selectElementByClick']>>>>(),
 })
+export const inspectorState = shallowReadonly(state)  // exposed for ../../preview-runtime/*
+
 const appContainer = document.createElement('div')
 document.body.appendChild(appContainer)
 createApp({
@@ -34,17 +44,6 @@ createApp({
   },
 }).mount(appContainer)
 
-function toPickResultNodesWithAncestors(el: HTMLElement | null | undefined) {
-  const nodes: InspectorRuntimeApi.PickResultNode[] = []
-  let ptr = el
-  while (ptr) {
-    const items = toPickResultNodes(ptr)
-    if (items.length) nodes.push(...items)
-    ptr = ptr.parentElement
-  }
-  return nodes
-}
-
 async function selectElementBySelector(selector: string | HTMLElement) {
   const el = typeof selector === 'string' ? document.querySelector(selector) as HTMLElement : selector
   const nodes = toPickResultNodesWithAncestors(el)
@@ -52,18 +51,18 @@ async function selectElementBySelector(selector: string | HTMLElement) {
   state.hoveringElement = el
   state.hoveringInfo = nodes[0]?.loc
 
-  selectingPromise?.resolve({ nodes })
+  state.selectingPromise?.resolve({ nodes })
   return { nodes }
 }
 
 async function selectElementByClick() {
-  if (selectingPromise) return selectingPromise  // already selecting
+  if (state.selectingPromise) return state.selectingPromise  // already selecting
 
   state.isCapturing = true
   state.hoveringElement = null
   state.hoveringInfo = null
 
-  const promise = selectingPromise = makePromise()
+  const promise = state.selectingPromise = makePromise()
 
   const handleMouseMove = (e: MouseEvent | PointerEvent) => {
     e.preventDefault();
@@ -114,7 +113,7 @@ async function selectElementByClick() {
 
 
   promise.then(() => {
-    selectingPromise = undefined // next time is fresh new picking
+    state.selectingPromise = undefined // next time is fresh new picking
     state.isCapturing = false
     setTimeout(() => {
       window.removeEventListener('mousemove', handleMouseMove, true)
@@ -130,12 +129,18 @@ async function selectElementByClick() {
   return promise
 }
 
-export const inspectorState = shallowReadonly(state)
+async function queryElementRect(selector: string) {
+  const el = typeof selector === 'string' ? document.querySelector(selector) as HTMLElement : selector
+  const rect = el?.getBoundingClientRect()
+  if (!rect) return null
 
-export const inspectorRuntimeApi: InspectorRuntimeApi = {
-  selectElementByClick,
-  selectElementBySelector,
+  return { x: rect.left, y: rect.top, width: rect.width, height: rect.height }
 }
+
+// #endregion
+
+// ----------------------------------------------
+// #region communication
 
 export const inspectorEditorApi = createWorkerDispatcher<InspectorEditorApi>(
   (payload, transferable) => inspectorEditorPort?.postMessage(payload, transferable)

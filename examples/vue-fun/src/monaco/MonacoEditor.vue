@@ -2,11 +2,12 @@
   <div ref="editorContainer" class="monaco-editor-container"></div>
 </template>
 
-<script setup>
-import { ref, onMounted, onUnmounted, watch, watchEffect } from "vue";
-import * as monaco from "monaco-editor-core";
-import { random } from "lodash-es";
+<script setup lang="ts">
 import { useFileEditorStore } from "@/store/fileEditor";
+import { random } from "lodash-es";
+import * as monaco from "monaco-editor-core";
+import { onMounted, onUnmounted, ref, watch, watchEffect } from "vue";
+import type { Nil } from "yon-utils";
 import "./setup";
 
 const props = defineProps({
@@ -28,25 +29,26 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(["update:modelValue"]);
+const emit = defineEmits<{
+  "update:modelValue": [value: string];
+  "ready": [editor: monaco.editor.IStandaloneCodeEditor];
+}>();
 
-const editorContainer = ref(null);
-/** @type {monaco.editor.IStandaloneCodeEditor} */
-let editor = null;
-/** @type {monaco.editor.ITextModel} */
-let currentModel = null;
+const editorContainer = ref<HTMLElement | null>(null);
+let editor: monaco.editor.IStandaloneCodeEditor | Nil = null;
+let currentModel: monaco.editor.ITextModel | Nil = null;
 
 const editorStore = useFileEditorStore()
 const tempUri = monaco.Uri.from({ scheme: 'in-memory', path: random(0, 1e9).toString(36) })
 
 watch(() => props.path, (path, _, onCleanup) => {
   /** @type {monaco.editor.ITextModel} */
-  let model;
+  let model: monaco.editor.ITextModel;
   if (!path) { //useTempUri
     let model = monaco.editor.getModel(tempUri)
     if (!model) {
       model = monaco.editor.createModel(props.modelValue, props.language, tempUri)
-      onCleanup(() => { model.dispose() })
+      onCleanup(() => { model!.dispose() })
     }
     model.setValue(props.modelValue)
     onCleanup(watchEffect(() => {
@@ -67,26 +69,33 @@ watch(() => props.path, (path, _, onCleanup) => {
     model = editorStore.getMonacoModelOfPath(path)
   }
 
-  currentModel = model
-  editor?.setModel(model)
+  currentModel = model!
+  editor?.setModel(model!)
 }, { immediate: true })
 
 onMounted(() => {
   // Initialize Monaco Editor
-  editor = monaco.editor.create(editorContainer.value, {
+  editor = monaco.editor.create(editorContainer.value!, {
     // value: props.modelValue,
     // language: props.language,
     model: currentModel,
     automaticLayout: true,
     fixedOverflowWidgets: true,
+    autoClosingBrackets: 'always',
+    autoClosingDelete: 'always',
+    autoClosingQuotes: 'always',
+    autoIndent: 'advanced',
+    autoClosingOvertype: 'auto',
     ...props.options,
   });
 
   // Listen for content changes
   editor.onDidChangeModelContent(() => {
-    const value = editor.getValue();
+    const value = editor!.getValue();
     emit("update:modelValue", value);
   });
+
+  emit("ready", editor);
 });
 
 onUnmounted(() => {

@@ -1,3 +1,5 @@
+import type { RectLike } from "yon-utils"
+
 /**
  * extra information is mounted to `vnode.props[KEY_PROPS_DATA]` for vue-inspector
  * 
@@ -31,11 +33,13 @@ export type InspectorRuntimeApi = {
   selectElementBySelector(selector: string): Promise<{
     nodes: Array<InspectorRuntimeApi.PickResultNode>
   }>
+
+  queryElementRect(selector: string): Promise<RectLike | null>
 }
 
 export namespace InspectorRuntimeApi {
   export type PickResultNode = {
-    rect: { left: number, top: number, width: number, height: number },
+    rect: RectLike,
     type: 'node' | 'component',
     selector: string, // unique selector for this node
     loc: {

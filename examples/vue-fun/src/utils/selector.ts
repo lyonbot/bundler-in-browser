@@ -16,7 +16,7 @@ export function elToSelector(el: HTMLElement): string {
     // Check for a unique ID
     if (currentEl.id) {
       selectorParts.unshift(`#${currentEl.id}`);
-      return selectorParts.join(' '); // If an ID is found, it's unique enough, so we can stop
+      break; // If an ID is found, it's unique enough, so we can stop
     }
 
     // Check for unique class(es)
@@ -60,5 +60,5 @@ export function elToSelector(el: HTMLElement): string {
     currentEl = currentEl.parentElement;
   }
 
-  return selectorParts.join(' ');
+  return selectorParts.join(' > ');
 }
