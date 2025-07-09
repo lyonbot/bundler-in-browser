@@ -18,7 +18,6 @@ export const inspectorRuntimeApi: InspectorRuntimeApi = {
 
 const state = reactive({
   isCapturing: false,
-  hoveringElement: null as HTMLElement | null,
   hoveringInfo: null as InspectorDataFromElement | null,
   selectElementByClick,
   selectingPromise: shallowRef<undefined | ImperativePromiseEx<Awaited<ReturnType<InspectorRuntimeApi['selectElementByClick']>>>>(),
@@ -32,24 +31,25 @@ createApp({
     watchPostEffect(() => {
       inspectorEditorApi.setHoveringNode(
         state.isCapturing
-          ? toPickResultNodes(state.hoveringElement, state.hoveringInfo)[0]
+          ? toPickResultNodes(state.hoveringInfo)[0]
           : null
       )
     })
   },
   render() {
     return [
-      state.isCapturing && h(Overlay, { element: state.hoveringElement, info: state.hoveringInfo }),
+      state.isCapturing && h(Overlay, { info: state.hoveringInfo }),
     ]
   },
 }).mount(appContainer)
 
 async function selectElementBySelector(selector: string | HTMLElement) {
   const el = typeof selector === 'string' ? document.querySelector(selector) as HTMLElement : selector
-  const nodes = toPickResultNodesWithAncestors(el)
+  const initInfo = getInspectorDataFromElement(el)
+  const nodes = toPickResultNodesWithAncestors(initInfo)
+
   state.isCapturing = false
-  state.hoveringElement = el
-  state.hoveringInfo = nodes[0]?.loc
+  state.hoveringInfo = initInfo
 
   state.selectingPromise?.resolve({ nodes })
   return { nodes }
@@ -59,7 +59,6 @@ async function selectElementByClick() {
   if (state.selectingPromise) return state.selectingPromise  // already selecting
 
   state.isCapturing = true
-  state.hoveringElement = null
   state.hoveringInfo = null
 
   const promise = state.selectingPromise = makePromise()
@@ -78,8 +77,7 @@ async function selectElementByClick() {
       element = element.parentElement;
     }
 
-    if (element !== state.hoveringElement) {
-      state.hoveringElement = element
+    if (element !== state.hoveringInfo?.element) {
       state.hoveringInfo = info
     }
   }
@@ -95,7 +93,7 @@ async function selectElementByClick() {
     e.preventDefault();
     e.stopPropagation();
 
-    const nodes = toPickResultNodesWithAncestors(state.hoveringElement)
+    const nodes = toPickResultNodesWithAncestors(state.hoveringInfo)
     promise.resolve({
       nodes
     })

@@ -5,17 +5,8 @@
   </div>
 
   <div class="flex items-center gap-2">
-    <button class="action-button action-button-sm" @click="emit('decrement')">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
-      </svg>
-    </button>
-    
-    <button class="action-button action-button-sm" @click="emit('increment')">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-      </svg>
-    </button>
+    <t-button @click="emit('decrement')" theme="default">-1</t-button>
+    <t-button @click="emit('increment')" theme="default">+1</t-button>
   </div>
 </template>
 

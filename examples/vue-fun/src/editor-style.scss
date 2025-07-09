@@ -3,6 +3,7 @@
 }
 
 .monaco-jumpHintDecorator {
+    @apply animate-pulse animate-duration-300;
     background-color: #fcd34d66;
     outline: 2px solid #fcd34d;
     outline-offset: 2px;

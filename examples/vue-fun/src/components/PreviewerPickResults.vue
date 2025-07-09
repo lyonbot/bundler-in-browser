@@ -4,15 +4,17 @@
 import type { InspectorRuntimeApi } from '@/abilities/vue-inspector/constants';
 import { useFileEditorStore } from '@/store/fileEditor';
 import * as monaco from 'monaco-editor-core';
-import { computed, ref, toRaw, watch, watchPostEffect } from 'vue';
+import { computed, ref, shallowRef, toRaw, watch, watchPostEffect, type Ref } from 'vue';
 import { createPopper } from '@popperjs/core';
-import { useEventListener } from '@vueuse/core';
+import { useEventListener, useLocalStorage } from '@vueuse/core';
 import { Chart3DFilledIcon, CodeIcon } from 'tdesign-icons-vue-next';
 import { basename } from 'path';
 import MonacoEditor from '@/monaco/MonacoEditor.vue';
-import { delay, type Nil, type RectLike } from 'yon-utils';
+import { delay, startMouseMove, type Nil, type RectLike } from 'yon-utils';
 import { useRuntimeConnection } from '@/store/runtimeConnection';
 import { retryUntil } from '@/utils/retry';
+import { clamp } from 'lodash-es';
+import { createResizeHandler } from '@/utils/resizing';
 
 const editorStore = useFileEditorStore()
 const runtimeConnection = useRuntimeConnection()
@@ -42,7 +44,7 @@ useEventListener(
   true
 )
 
-const lastClickedNode = ref<InspectorRuntimeApi.PickResultNode | null>(null)
+const lastClickedNode = shallowRef<InspectorRuntimeApi.PickResultNode | null>(null)
 let targetRectInRuntime: RectLike | Nil = null // for popper.js to sync position
 
 watchPostEffect((onCleanUp) => {
@@ -135,7 +137,7 @@ const monacoOptions: monaco.editor.IEditorConstructionOptions = {
   stickyScroll: { enabled: false },
   glyphMargin: false,
   folding: false,
-  lineDecorationsWidth: 4,
+  lineDecorationsWidth: 0,
   padding: { top: 4 },
   lineNumbersMinChars: 0
 }
@@ -173,30 +175,54 @@ watch(     // auto select the node by current active editor's position
   (canDisplay) => {
     if (!canDisplay) return
 
+    let node: InspectorRuntimeApi.PickResultNode | undefined
     const path = editorStore.activeFilePath
     const pos = editorStore.pathToEditors.get(path)[0]?.getPosition()
-    if (!pos) return
+    if (pos) {
+      // find the node, until it goes too far
+      for (const n of nodes) {
+        if (n.loc.source === path && new monaco.Range(
+          n.loc.start.line,
+          n.loc.start.column,
+          n.loc.end.line,
+          n.loc.end.column,
+        ).containsPosition(pos)) {
+          node = n
+          break
+        }
 
-    // find the node
-    const node = nodes.find(n => n.loc.source === path && new monaco.Range(
-      n.loc.start.line,
-      n.loc.start.column,
-      n.loc.end.line,
-      n.loc.end.column,
-    ).containsPosition(pos))
+        // check til first "component" node
+        // FIXME: not accurate. shall check if cursor is in the node outside current tree
+        if (n.type === 'component') break
+      }
+    }
 
     lastClickedNode.value = node || nodes[0]
   },
 )
+
+const sidebarWidth = useLocalStorage('ppr:sidebar-width', 160)
+const codeWidth = useLocalStorage('ppr:code-width', 360)
+const panelHeight = useLocalStorage('ppr:panel-height', 200)
+
+const startResizeSidebar = createResizeHandler([
+  { axis: 'x', ref: sidebarWidth, min: 100, max: 500 },
+  { axis: 'y', ref: panelHeight, min: 100, max: 500 },
+])
+const startResizePanel = createResizeHandler([
+  { axis: 'x', ref: codeWidth, min: 100, max: 500 },
+  { axis: 'y', ref: panelHeight, min: 100, max: 500 }
+])
+
 </script>
 
 <template>
   <div ref="anchorRef" style="position: absolute; left: 0; top: 0"></div>
   <div v-if="canDisplay" :class="$style.mask" @click="emits('close')"></div>
-  <div v-if="canDisplay" :class="$style.wrapper" ref="wrapperRef">
+  <div v-if="canDisplay" :class="$style.wrapper" ref="wrapperRef" :style="{ height: `${panelHeight}px` }">
 
     <!-- node list menu -->
-    <div class="w-40 overflow-auto">
+    <div class="overflow-auto" :style="{ width: `${sidebarWidth}px` }">
       <div v-for="node, idx in nodes" :key="idx" :class="{
         [$style.item]: true,
         [$style.componentItem]: node.type === 'component',
@@ -211,11 +237,16 @@ watch(     // auto select the node by current active editor's position
       </div>
     </div>
 
+    <div :class="$style.widthResizer" @pointerdown="startResizeSidebar" class="b-l b-l-gray-200 b-l-solid"></div>
+
     <!-- peek editor -->
-    <div class="w-90 relative b-l b-l-gray-200 b-l-solid">
+    <div class="relative" :style="{ width: `${codeWidth}px` }">
       <MonacoEditor class="h-full w-full" v-if="lastClickedNode" :path="lastClickedNode.loc.source"
         @ready="handleMonacoReady" :options="monacoOptions" />
     </div>
+    <div :class="$style.widthResizer" @pointerdown="startResizePanel"></div>
+
+    <div :class="$style.heightResizer" @pointerdown="startResizePanel"></div>
   </div>
 </template>
 
@@ -223,7 +254,6 @@ watch(     // auto select the node by current active editor's position
 .wrapper {
   position: absolute;
   z-index: 100;
-  height: 200px;
   overflow: hidden;
   border: 1px solid #0009;
   @apply bg-white border border-gray-300 rounded-md shadow-xl;
@@ -247,5 +277,33 @@ watch(     // auto select the node by current active editor's position
   inset: 0;
   z-index: 99;
   background-color: rgba(0, 0, 0, 0.1);
+}
+
+.widthResizer {
+  touch-action: none;
+  width: 4px;
+  cursor: ew-resize;
+  background-color: #0000;
+  align-self: stretch;
+
+  &:hover {
+    background-color: #0003;
+  }
+}
+
+.heightResizer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  touch-action: none;
+  height: 4px;
+  cursor: ns-resize;
+  background-color: #0000;
+  justify-self: stretch;
+
+  &:hover {
+    background-color: #0003;
+  }
 }
 </style>

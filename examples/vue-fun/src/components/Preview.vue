@@ -39,6 +39,7 @@ import { DragDropIcon, PlayCircleFilledIcon, RefreshIcon } from 'tdesign-icons-v
 import { Button, Loading, Tooltip, DropdownMenu, DropdownItem, Popup } from 'tdesign-vue-next';
 import { ref, shallowRef, watch, watchPostEffect } from 'vue';
 import { MOD_KEY_LABEL, modKey } from 'yon-utils'
+import type * as monaco from 'monaco-editor-core'
 
 import { useRuntimeConnection } from '@/store/runtimeConnection';
 import { useBundlerController } from '@/store/bundler';
@@ -82,12 +83,24 @@ async function selectElementByClick() {
         if (node) {
             const { loc } = node
             const editorStore = useFileEditorStore()
-            editorStore.openFileAndGoTo(loc.source, {
+
+            const range: monaco.IRange = {
                 startLineNumber: loc.start.line,
                 startColumn: loc.start.column,
                 endLineNumber: loc.end.line,
                 endColumn: loc.end.column,
-            })
+            };
+            editorStore.openFileAndGoTo(loc.source, { ...range })
+
+            // highlight the code for a few seconds
+            const decoration: monaco.editor.IModelDeltaDecoration = {
+                range,
+                options: {
+                    className: 'monaco-jumpHintDecorator',
+                }
+            }
+            editorStore.fileDecorations.add(loc.source, decoration)
+            setTimeout(() => editorStore.fileDecorations.delete(loc.source, decoration), 800)
         }
     } finally {
         isPickingElement.value = false

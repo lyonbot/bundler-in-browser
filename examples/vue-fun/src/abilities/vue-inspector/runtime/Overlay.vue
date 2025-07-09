@@ -1,31 +1,33 @@
 <template>
-  <div class="inspector-overlay" :class="{ active: hasElement }" :style="dynamicStyle">
+  <div class="inspector-overlay" :class="{ active: !!element }" :style="dynamicStyle">
     <div class="inspector-info" v-if="info">
       <div class="inspector-overlay-filename">{{ info.source }}</div>
-      <div class="inspector-overlay-loc">{{ info.start.line }}:{{ info.start.column }}-{{ info.end.line }}:{{ info.end.column }}</div>
+      <div class="inspector-overlay-loc">{{ info.start.line }}:{{ info.start.column }}-{{ info.end.line }}:{{
+        info.end.column }}</div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watchEffect } from 'vue';
+import type { InspectorDataFromElement } from './utils';
+import type { Nil } from 'yon-utils';
 
 const props = defineProps<{
-  element: HTMLElement | null
-  info: import('../for-runtime').ParsedInspectorData | null
+  info: InspectorDataFromElement | Nil
 }>()
 
-const hasElement = computed(() => !!props.element)
+const element = computed(() => props.info?.element)
 const dynamicStyle = ref<any>({})
 
 watchEffect((onCleanup) => {
-  const element = props.element
+  const el = element.value
 
   let raf = 0;
   function nextSyncPosition() {
-    if (!element) return
+    if (!el) return
     raf = requestAnimationFrame(nextSyncPosition)
-    const rect = element.getBoundingClientRect()
+    const rect = el.getBoundingClientRect()
     dynamicStyle.value = {
       top: rect.top + 'px',
       left: rect.left + 'px',

@@ -4,7 +4,7 @@
 
 import { shikiToMonaco, textmateThemeToMonacoTheme } from '@shikijs/monaco'
 import * as monaco from 'monaco-editor-core'
-import { createHighlighter, bundledThemes, normalizeTheme } from 'shiki'
+import { createHighlighter, bundledThemes, normalizeTheme } from 'shiki/dist/bundle-web.mjs'
 
 // 创建一个可复用的语法高亮器
 // see https://textmate-grammars-themes.netlify.app/
