@@ -2,6 +2,14 @@
   <div class="flex h-screen">
     <div class="flex-0 flex flex-col overflow-auto" :style="{ flexBasis: `${fileListWidth}px` }">
       <FileTree />
+      <div class="mt-a">
+        <Button @click="persistStore.resetProject" theme="default">
+          <template #icon>
+            <RefreshIcon />
+          </template>
+          Reset Project
+        </Button>
+      </div>
     </div>
     <div class="w-1 touch-none hover:bg-gray-2 cursor-ew-resize" @pointerdown="startResizeFileList"></div>
 
@@ -10,7 +18,8 @@
     </div>
     <div class="w-1 touch-none hover:bg-gray-2 cursor-ew-resize" @pointerdown="startResizeEditor"></div>
 
-    <div class="flex-1 min-w-0 z-100" :style="{ flexGrow: 1 - editorWidthFactor }"> <!-- z-100 for monaco overlay bug -->
+    <div class="flex-1 min-w-0 z-100" :style="{ flexGrow: 1 - editorWidthFactor }">
+      <!-- z-100 for monaco overlay bug -->
       <Preview />
     </div>
   </div>
@@ -24,9 +33,9 @@
 
 <script setup lang="ts">
 import { useBundlerController } from "./store/bundler";
+import { Button } from "tdesign-vue-next";
 
-const { worker, readyPromise, compile } = useBundlerController();
-const editorStore = useFileEditorStore();
+const { readyPromise, compile } = useBundlerController();
 
 import { useEventListener, useLocalStorage } from "@vueuse/core";
 import { ref } from "vue";
@@ -37,38 +46,21 @@ import Preview from "./components/Preview.vue";
 import { useFileEditorStore } from "./store/fileEditor";
 import { Loading } from "tdesign-vue-next";
 import { createResizeHandler } from "./utils/resizing";
+import { usePersistStore } from "./store/persistStore";
 
 const loading = ref(true);
+const persistStore = usePersistStore();
 
 readyPromise.then(async () => {
   loading.value = false;
-  await worker.api.writeFile('/src/index.js', `
-    import "./styles.css";
-    import Main from './Main.vue'
-    export default Main
-    `.replace(/^\s+/gm, ''));
-
-  await worker.api.writeFile("/src/styles.css", `
-    @tailwind base;
-    @tailwind components;
-    @tailwind utilities;
-    `.replace(/^\s+/gm, ''));
-
-  const sampleFiles = import.meta.glob('./sample-project/**/*', { import: 'default', query: 'raw' })
-  for (const [file, loader] of Object.entries(sampleFiles)) {
-    const source = await loader() as string
-    const path = `/src/${file.slice('./sample-project/'.length)}`
-    await worker.api.writeFile(path, source)
-  }
-
-  editorStore.openFile('/src/Main.vue')
-
-  compile();
+  await persistStore.loadProject();
+  await compile();
 });
 
 useEventListener(window, 'keydown', e => {
   if (modKey(e) === modKey.Mod && e.code === 'KeyS') {
     compile();
+    persistStore.storeProject();
     e.preventDefault();
   }
 })

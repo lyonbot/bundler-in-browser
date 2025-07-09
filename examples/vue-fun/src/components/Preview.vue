@@ -48,6 +48,7 @@ import { useFileEditorStore } from '@/store/fileEditor';
 import type { InspectorRuntimeApi } from '@/abilities/vue-inspector/constants';
 import PreviewerPickResults from './PreviewerPickResults.vue';
 import { retryUntil } from '@/utils/retry';
+import { usePersistStore } from '@/store/persistStore';
 
 const bundler = useBundlerController();
 const runtimeConnection = useRuntimeConnection();
@@ -69,6 +70,7 @@ useEventListener(window, 'message', function handleGlobalMessage(e: MessageEvent
 
 function compile() {
     bundler.compile();
+    usePersistStore().storeProject();
 }
 
 const lastPickedResult = shallowRef<InspectorRuntimeApi.PickResultNode[]>([])
