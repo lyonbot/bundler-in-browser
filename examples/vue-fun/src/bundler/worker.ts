@@ -11,8 +11,13 @@ import { fs } from "@zenfs/core";
 import * as shabbyVueHMR from '../abilities/shabby-vue-hmr/for-bundler.js'
 import { dirname, join } from "@zenfs/core/path.js";
 import { throttle } from "lodash-es";
+import type { PartialMessage } from "esbuild-wasm";
+import { ref } from "vue";
 
 const bundler = new BundlerInBrowser(fs as any);
+const lastCompileErrors = ref<PartialMessage[]>([])
+
+let isBuildingHMR = false
 
 async function init() {
   await bundler.initialize({})
@@ -43,6 +48,36 @@ async function init() {
     enableProdDevTools: true,
     templateCompilerOptions: {},
   });
+  vuePluginInstance.options.getFallbackForError = (ctx, errors) => {
+    if (isBuildingHMR) return ''
+
+    lastCompileErrors.value.push(...errors)
+    return `
+      import { h, defineComponent } from 'vue';
+      export default defineComponent({
+        render() {
+          const j = ${JSON.stringify(errors.map(e => {
+      let loc = ''
+      if (typeof e.location?.line === 'number') {
+        loc = `${e.location?.line}:${e.location?.column}`
+      }
+
+      return ({ text: e.text, loc });
+    }))};
+          return h(
+            'div', { style: { color: 'white', background: '#f99', padding: '20px' } }, 
+            [
+              h('div', { style: { 'font-size': '15px' } }, 'Build Error'),
+              h('div', { style: { 'font-size': '12px', 'border-bottom': '1px solid' } }, "${ctx.filePath}"),
+              h('ul', { style: { 'list-style': 'square', 'padding-left': '20px', 'white-space': 'pre-wrap', 'font-family': 'monospace' } }, [
+                ...j.map(it => h('li', it.text + ' :' + it.loc))
+              ])
+            ]
+          )
+        }
+      })
+    `
+  }
 
   setProdMode(false)
   log('init done');
@@ -60,6 +95,7 @@ const sendCompileProgress = throttle((message: string) => postMessage({ type: 'w
 async function compile() {
   try {
     resetModifiedList()
+    lastCompileErrors.value = []
     const out = await bundler.build()
     return {
       user: { js: out.userCode.js, css: out.userCode.css },
@@ -84,10 +120,16 @@ async function tryMakeHMRPatch() {
   // FIXME: bundler-in-browser shall support HMR, so this function will be removed
 
   if (isProd) return;
+  if (lastCompileErrors.value.length) return; // previous build has error, cannot do hmr 
 
-  const changedPath = [...modifiedFiles.keys()]
-  const result = await shabbyVueHMR.tryBuildHMRPatch(vuePluginInstance, changedPath)
-  return result
+  try {
+    isBuildingHMR = true
+    const changedPath = [...modifiedFiles.keys()]
+    const result = await shabbyVueHMR.tryBuildHMRPatch(vuePluginInstance, changedPath)
+    return result
+  } finally {
+    isBuildingHMR = false
+  }
 }
 
 // #region file access
@@ -197,6 +239,14 @@ const methods = {
   init,
   compile,
   tryMakeHMRPatch,
+
+  // errors
+  getLastCompileErrors: async () => lastCompileErrors.value.map(e => ({
+    message: e.text,
+    file: e.location?.file,
+    line: e.location?.line,
+    column: e.location?.column,
+  })),
 
   // fs
   readdir,

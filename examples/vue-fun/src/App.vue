@@ -14,7 +14,14 @@
     <div class="w-1 touch-none hover:bg-gray-2 cursor-ew-resize" @pointerdown="startResizeFileList"></div>
 
     <div class="flex-1 min-w-0 flex flex-col relative contain-size" :style="{ flexGrow: editorWidthFactor }">
-      <Editors />
+      <div class="flex flex-col absolute inset-0">
+        <div class="relative flex-1 contain-size">
+          <Editors />
+        </div>
+        <div class="max-h-32 overflow-auto">
+          <ErrorPanel />
+        </div>
+      </div>
 
       <!-- AI Chat Button -->
       <div class="absolute right-4 bottom-4 z-100">
@@ -61,6 +68,7 @@ import { usePersistStore } from "./store/persistStore";
 import { ChatIcon, RefreshIcon } from "tdesign-icons-vue-next";
 import AIChatModal from "./components/AIChatModal.vue";
 import { useAIChatStore } from "./store/aiChat";
+import ErrorPanel from "./components/ErrorPanel.vue";
 
 const loading = ref(true);
 const persistStore = usePersistStore();

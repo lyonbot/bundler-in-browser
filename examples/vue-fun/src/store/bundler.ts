@@ -1,12 +1,18 @@
 import { defineStore } from "pinia";
 import { ref, shallowReactive, shallowRef } from "vue";
 import { getBundlerController, type BundlerController } from "../bundler/controller";
-import { BundlerInBrowser, EventEmitter } from "bundler-in-browser";
+import { EventEmitter } from "bundler-in-browser";
 import { makePromise } from "yon-utils";
 
 export const useBundlerController = defineStore('workerController', () => {
   const readyPromise = makePromise<void>()
   const isCompiling = ref<false | string>(false);
+  const compilingErrors = ref<{
+    file?: string;
+    message?: string;
+    line?: number;
+    column?: number;
+  }[]>([])
   const worker = shallowReactive<BundlerController & { loading?: boolean }>({
     api: null as any,
     worker: null as any,
@@ -49,6 +55,7 @@ export const useBundlerController = defineStore('workerController', () => {
       return result;
     } finally {
       isCompiling.value = false;
+      compilingErrors.value = await worker.api.getLastCompileErrors().catch(() => [])
     }
   }
 
@@ -56,6 +63,7 @@ export const useBundlerController = defineStore('workerController', () => {
     worker,
     isCompiling,
     readyPromise,
+    compilingErrors,
     lastBundleOutput,
     compile,
   }
