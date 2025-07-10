@@ -189,13 +189,16 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
       build.onResolve({ filter: /\.vue/ }, async (args) => {
         const params = getUrlParams(args.path);
 
+        let path = getFullPath(args)
+        if (!bundler.fs.existsSync(path)) return null
+
         let namespace = 'file';
         if (params.type === "script") namespace = "sfc-script";
         else if (params.type === "template") namespace = "sfc-template";
         else if (params.type === "style") namespace = "sfc-style";
 
         return {
-          path: getFullPath(args),
+          path,
           namespace,
           pluginData: {
             ...args.pluginData,
