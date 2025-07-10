@@ -1,9 +1,10 @@
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { wrapCommonJS } from '../../src/utils/string.js';
 import { createBundlerForTest, initializeEsbuild } from '../testutil.js';
 import { installVuePlugin, installSassPlugin } from 'bundler-in-browser';
 import { newFunction } from 'yon-utils';
 import { insertElement, insertStyle, resetInsertedElements } from './e2eutils.js';
+import type { PartialMessage } from 'esbuild-wasm';
 
 declare global {
   const __VUE_HMR_RUNTIME__: any
@@ -212,6 +213,76 @@ describe('vue', () => {
     expect(container.querySelector('.msg')?.textContent).toEqual('hello'); // reset
     expect(container.querySelector('button')?.textContent).toEqual('修改！');
     expect(getComputedStyle(container.querySelector('.msg')!).color).toEqual('rgb(0, 0, 255)');
+  })
+
+  it.each([
+    { hasHandler: false },
+    { hasHandler: true },
+  ])('error and getFallbackForError, %s', async (opt) => {
+    for (const errorAt of ['template', 'script'] as const) {
+      const { bundler } = await createBundlerForTest({
+        '/src/index.js': `
+        import App from './App.vue';
+        export default App;
+      `,
+        '/src/App.vue': `
+        <template>
+          <div class="msg">{{ msg }}</div>
+          <button @click="msg = 'world'">change</button>
+          ${errorAt === 'template' ? `</div>` : ''}
+        </template>
+        <script setup>
+          import { ref } from 'vue';
+          const msg = ref('hello');
+          ${errorAt === 'script' ? `foo..bar?` : ''}
+        </script>
+      `,
+      })
+
+      const vuePlugin = await installVuePlugin(bundler);
+      bundler.config.externals.push('vue');
+
+      if (opt.hasHandler) {
+        let lastErrors: PartialMessage[] = []
+        const handler = vi.fn((ctx: any, errors: PartialMessage[]) => {
+          lastErrors = errors;
+          return `
+            import { defineComponent, h } from 'vue';
+            export default defineComponent({
+              render() {
+                return h('pre', 'errors: ' + ${JSON.stringify(errors.map(x => x.text).join('\n'))});
+              }
+            })
+          `
+        })
+        vuePlugin.options.getFallbackForError = handler
+        const result = await bundler.build();
+
+        // run js
+        const App = runJsGetExports(result.js).default;
+        const container = document.createElement('div');
+        insertElement(container);
+        Vue.createApp(App).mount(container);
+
+        expect(handler).toBeCalled()
+
+        if (errorAt === 'template') {
+          // the bad end tag is at line 5
+          expect(lastErrors.some(e => e.location?.file === '/src/App.vue' && e.location?.line === 5)).toBeTruthy()
+        }
+        
+        if (errorAt === 'script') {
+          // the script err
+          expect(lastErrors.some(e => e.location?.file === '/src/App.vue' && e.location?.line === 10)).toBeTruthy()
+        }
+
+      } else {
+        // cannot build
+
+        const resultPromise = bundler.build();
+        await expect(resultPromise).rejects.toThrow();
+      }
+    }
   })
 
   it('tailwindcss + scss', async () => {

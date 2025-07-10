@@ -3,7 +3,7 @@ import * as compiler from 'vue/compiler-sfc';
 import { type Position } from '@vue/compiler-core';
 import type { BundlerInBrowser } from "../BundlerInBrowser.js";
 import type esbuild from "esbuild-wasm";
-import path from "path";
+import path, { dirname } from "path";
 import { memoAsync, stripQuery } from '../utils/index.js';
 import { countChar, getLineText, offsetToPosition, toBase64 } from '../utils/string.js';
 
@@ -87,6 +87,15 @@ export interface InstallVuePluginOptions {
     templateCompileResults: compiler.SFCTemplateCompileResults
   }) => MaybePromise<void>;
 
+  /**
+   * if script or template has compiler error, whether abort building, or just return a fallback component as result?
+   * 
+   * returns the javascript content, like `import { defineComponent } from "vue"; export default defineComponent(...)`
+   * 
+   * if return nothing, a error will be thrown
+   */
+  getFallbackForError?: (ctx: VueSfcCacheItem, error: esbuild.PartialMessage[]) => MaybePromise<string>
+
   /** whether inject HMR related code `__VUE_HMR_RUNTIME__.createRecord(hmrId, sfcMain)` */
   hmr?: boolean;
 
@@ -146,6 +155,7 @@ const defaultOptions: Required<InstallVuePluginOptions> = {
   injectSFCRuntime: () => '',
   patchCompiledScript: () => void 0,
   patchTemplateCompileResults: () => void 0,
+  getFallbackForError: () => '',
 }
 
 export default function installVuePlugin(bundler: BundlerInBrowser, opts: InstallVuePluginOptions = {}) {
@@ -249,7 +259,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         // Note: shall after `sfc-script` loader
         // because it might need to know `bindingMetadata` from `scriptSetup`
         const vuePluginData = args.pluginData.vue as VuePluginMiddleData;
-        const { compiledScriptPromise, templateCompileOptions, sfcCacheItem, toESBuildError } = vuePluginData;
+        const { templateCompileOptions, sfcCacheItem, toESBuildError } = vuePluginData;
 
         if (!templateCompileOptions) {
           return {
@@ -260,7 +270,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         }
 
         // `bindingMetadata` from `scriptSetup` is now available
-        templateCompileOptions.compilerOptions!.bindingMetadata = (await compiledScriptPromise)?.bindings;
+        templateCompileOptions.compilerOptions!.bindingMetadata = sfcCacheItem.compiledScript?.bindings;
 
         const ans = compiler.compileTemplate(templateCompileOptions);
         if (ans.errors.length > 0) return { errors: ans.errors.map(e => toESBuildError(e)) };
@@ -283,67 +293,9 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
 
       build.onLoad({ filter: /./, namespace: "sfc-script" }, async (args) => {
         const vuePluginData = args.pluginData.vue as VuePluginMiddleData;
-        const { descriptor, templateCompileOptions, id, hasTS, hasJSX, sfcCacheItem, toESBuildError, provideCompiledScript } = vuePluginData;
-
-        const filename = descriptor.filename;
-        let compiledScript: ReturnType<typeof compiler.compileScript>;
-        try {
-          const options = await invokeOptionsPatcher(
-            instance.options.scriptCompilerOptions,
-            {
-              inlineTemplate: instance.options.inlineTemplate,
-              id,
-              isProd,
-              genDefaultAs: COMP_IDENTIFIER,
-              fs: {
-                fileExists: (file) => bundler.fs.existsSync(file),
-                readFile: (file) => { try { return bundler.fs.readFileSync(file, 'utf8') as string; } catch { } },
-                realpath: (file) => bundler.fs.realpathSync(file, { encoding: 'utf8' }) as string,
-              },
-              templateOptions: templateCompileOptions || undefined,
-            },
-            descriptor
-          );
-          compiledScript = compiler.compileScript(descriptor, options);
-        } catch (e) {
-          if ('loc' in (e as any)) {
-            // vue-compiler doesn't fix Babel's loc information.try to find out the real loc
-            // (could be in script or scriptSetup)
-            const offsetPos0 = descriptor.script?.loc.start
-            const offsetPos1 = descriptor.scriptSetup?.loc.start
-
-            let offsetPos = offsetPos0 || offsetPos1
-            if (offsetPos0 && offsetPos1) {
-              // both exists! try to find out by parsing Vue generated codeFrame
-              let m = String(e)
-              let lp = /^\s+\|\s*\^/m.exec(m)?.index // the line of  "   |   ^"
-              let lp2 = m.lastIndexOf('|', lp! + 1) // prev line like  "21 | v.."
-              let lp3 = m.lastIndexOf('\n', lp2) + 1 // prev line like  "21 | v.."
-              let lineNo = parseInt(m.slice(lp3, lp2), 10)
-
-              if (offsetPos0.line <= lineNo && descriptor.script!.loc.end.line >= lineNo) {
-                offsetPos = offsetPos0
-              } else {
-                offsetPos = offsetPos1
-              }
-            }
-
-            // fix loc information for Babel
-            const loc = (e as any).loc as BabelSyntaxError['loc']
-            loc.line += offsetPos!.line
-            loc.column += offsetPos!.column
-            loc.index += offsetPos!.offset
-          }
-          provideCompiledScript(new Error(`failed to compile <script>: ${e}`), undefined)
-          return { errors: [toESBuildError(e as SyntaxError)] }
-        }
-
-        const errors = compiledScript.warnings?.map(e => toESBuildError(e)) || [];
-        if (errors.length > 0) return { errors };
-
-        // for `sfc-template` loader, and patch* hooks
-        // will also update sfcCacheItem.compiledScript
-        provideCompiledScript(null, compiledScript);
+        const { sfcCacheItem, hasTS, hasJSX } = vuePluginData;
+        const filename = sfcCacheItem.filePath;
+        const compiledScript = sfcCacheItem.compiledScript!;
 
         // bundler allows injecting code for compiled <script>
         // and beware user MAY modify `compiledScript` in this hook
@@ -413,23 +365,7 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           offsetToPosition: (offset: number) => offsetToPosition(code, offset),
         })
 
-        if (errors.length > 0) return {
-          contents: code,
-          errors: errors.map(e => toESBuildError(e))
-        };
-
-        // ----------------------------------------------
-        // sfc-template might need to know `bindingMetadata` from `scriptSetup`
-        // so provide a Promise via pluginData, and a updater function
-
-        let provideCompiledScript!: VuePluginMiddleData['provideCompiledScript']
-        let compiledScriptPromise: VuePluginMiddleData['compiledScriptPromise'] = new Promise((res, rej) => {
-          provideCompiledScript = (err, data) => {
-            sfcCacheItem.compiledScript = data;
-            if (err) rej(err)
-            else res(data!)
-          }
-        })
+        if (errors.length > 0) return await getESBuildResultForError(sfcCacheItem, errors.map(e => toESBuildError(e)))
 
         // ----------------------------------------------
         // prepare infos for template, script and style
@@ -461,19 +397,6 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         //
 
         let outCodeParts: string[] = [];
-
-        // script block & script setup block (will be merged into one)
-        if (descriptor.script || descriptor.scriptSetup) {
-          const src = (descriptor.script && !descriptor.scriptSetup && descriptor.script.src) || (`${encPath}?type=script`)
-          outCodeParts.push(
-            `import ${COMP_IDENTIFIER} from "${src}";`,
-          );
-        } else {
-          outCodeParts.push(
-            `const ${COMP_IDENTIFIER} = {};`
-          )
-          provideCompiledScript(null, undefined); // no script block, so no compiledScript
-        }
 
         // styles
         for (let index = 0; index < descriptor.styles.length; index++) {
@@ -511,6 +434,32 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
             `import { render as ___render } from "${encPath}?type=template";`,
             `${COMP_IDENTIFIER}.render = ___render`,
           );
+        }
+
+        // script block & script setup block (will be merged into one)
+        if (descriptor.script || descriptor.scriptSetup) {
+          const src = (descriptor.script && !descriptor.scriptSetup && descriptor.script.src) || (`${encPath}?type=script`)
+          const { compiledScript, errors } = await compileScript(
+            sfcCacheItem,
+            {
+              id,
+              isProd,
+              toESBuildError,
+              templateOptions: templateCompileOptions || undefined
+            }
+          )
+          sfcCacheItem.compiledScript = compiledScript;
+          if (errors?.length) {
+            return await getESBuildResultForError(sfcCacheItem, errors);
+          }
+
+          outCodeParts.push(
+            `import ${COMP_IDENTIFIER} from "${src}";`,
+          );
+        } else {
+          outCodeParts.push(
+            `const ${COMP_IDENTIFIER} = {};`
+          )
         }
 
         // hmr
@@ -553,8 +502,6 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           hasTS: !!hasTS,
           toESBuildError,
           sfcCacheItem,
-          compiledScriptPromise,
-          provideCompiledScript,
         }
 
         return await bundler.pluginUtils.applyPostProcessors(args, {
@@ -567,6 +514,84 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
         })
       })
     }
+  }
+
+  async function compileScript(sfcCacheItem: VueSfcCacheItem, extra: {
+    id: string,
+    isProd: boolean,
+    templateOptions?: compiler.SFCTemplateCompileOptions
+    toESBuildError: ReturnType<typeof makeToEsBuildErrorFunction>
+  }): Promise<{
+    compiledScript?: ReturnType<typeof compiler.compileScript>,
+    errors: esbuild.OnLoadResult['errors']
+  }> {
+    const { id, isProd, templateOptions, toESBuildError } = extra;
+    const descriptor = sfcCacheItem.descriptor;
+
+    try {
+      const options = await invokeOptionsPatcher(
+        instance.options.scriptCompilerOptions,
+        {
+          inlineTemplate: instance.options.inlineTemplate,
+          id,
+          isProd,
+          genDefaultAs: COMP_IDENTIFIER,
+          fs: {
+            fileExists: (file) => bundler.fs.existsSync(file),
+            readFile: (file) => { try { return bundler.fs.readFileSync(file, 'utf8') as string; } catch { } },
+            realpath: (file) => bundler.fs.realpathSync(file, { encoding: 'utf8' }) as string,
+          },
+          templateOptions,
+        },
+        descriptor
+      );
+      const compiledScript = compiler.compileScript(descriptor, options);
+      return { compiledScript, errors: [] }
+    } catch (e) {
+      if ('loc' in (e as any)) {
+        // vue-compiler doesn't fix Babel's loc information.try to find out the real loc
+        // (could be in script or scriptSetup)
+        const offsetPos0 = descriptor.script?.loc.start
+        const offsetPos1 = descriptor.scriptSetup?.loc.start
+
+        let offsetPos = offsetPos0 || offsetPos1
+        if (offsetPos0 && offsetPos1) {
+          // both exists! try to find out by parsing Vue generated codeFrame
+          let m = String(e)
+          let lp = /^\s+\|\s*\^/m.exec(m)?.index // the line of  "   |   ^"
+          let lp2 = m.lastIndexOf('|', lp! + 1) // prev line like  "21 | v.."
+          let lp3 = m.lastIndexOf('\n', lp2) + 1 // prev line like  "21 | v.."
+          let lineNo = parseInt(m.slice(lp3, lp2), 10)
+
+          if (offsetPos0.line <= lineNo && descriptor.script!.loc.end.line >= lineNo) {
+            offsetPos = offsetPos0
+          } else {
+            offsetPos = offsetPos1
+          }
+        }
+
+        // fix loc information for Babel
+        const loc = (e as any).loc as BabelSyntaxError['loc']
+        loc.line += offsetPos!.line
+        loc.column += offsetPos!.column
+        loc.index += offsetPos!.offset
+      }
+      return { errors: [toESBuildError(e as SyntaxError)] }
+    }
+  }
+
+  async function getESBuildResultForError(sfcCacheItem: VueSfcCacheItem, errors: esbuild.PartialMessage[]) {
+    const fallback = await instance.options.getFallbackForError?.(sfcCacheItem, errors);
+    if (fallback) {
+      return {
+        contents: fallback,
+        resolveDir: dirname(sfcCacheItem.filePath),
+        errors: []
+      };
+    }
+    return {
+      errors: errors
+    };
   }
 
   instance.plugin = plugin;
@@ -590,11 +615,6 @@ interface VuePluginMiddleData {
   hasJSX: boolean;
   hasTS: boolean;
   sfcCacheItem: VueSfcCacheItem;
-
-  compiledScriptPromise: Promise<compiler.SFCScriptBlock | undefined>;
-  provideCompiledScript: { // invoked by `scriptSetup`
-    (err: Error | null | undefined, data: compiler.SFCScriptBlock | undefined): void
-  }
 }
 
 const getPreprocessCustomRequireWithSass = memoAsync(async () => {
