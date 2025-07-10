@@ -15,6 +15,15 @@
 
     <div class="flex-1 min-w-0 flex flex-col relative contain-size" :style="{ flexGrow: editorWidthFactor }">
       <Editors />
+
+      <!-- AI Chat Button -->
+      <div class="absolute right-4 bottom-4 z-100">
+        <Button shape="circle" theme="primary" @click="toggleAIModal">
+          <template #icon>
+            <ChatIcon />
+          </template>
+        </Button>
+      </div>
     </div>
     <div class="w-1 touch-none hover:bg-gray-2 cursor-ew-resize" @pointerdown="startResizeEditor"></div>
 
@@ -29,6 +38,9 @@
     <Loading />
     <div class="mt-4 text-xl">Loading Bundler and Environment...</div>
   </div>
+
+  <!-- AI Chat Modal -->
+  <AIChatModal />
 </template>
 
 <script setup lang="ts">
@@ -43,13 +55,16 @@ import { modKey } from "yon-utils";
 import Editors from "./components/Editors.vue";
 import FileTree from "./components/FileTree";
 import Preview from "./components/Preview.vue";
-import { useFileEditorStore } from "./store/fileEditor";
 import { Loading } from "tdesign-vue-next";
 import { createResizeHandler } from "./utils/resizing";
 import { usePersistStore } from "./store/persistStore";
+import { ChatIcon, RefreshIcon } from "tdesign-icons-vue-next";
+import AIChatModal from "./components/AIChatModal.vue";
+import { useAIChatStore } from "./store/aiChat";
 
 const loading = ref(true);
 const persistStore = usePersistStore();
+const aiChatStore = useAIChatStore();
 
 readyPromise.then(async () => {
   loading.value = false;
@@ -64,6 +79,12 @@ useEventListener(window, 'keydown', e => {
     e.preventDefault();
   }
 })
+
+// Toggle AI Modal
+function toggleAIModal() {
+  aiChatStore.showAIModalAtEditor()
+  // aiChatStore.aiModal.shown = !aiChatStore.aiModal.shown;
+}
 
 // ----------------------------------------------
 const fileListWidth = useLocalStorage('file-list-width', 220)
