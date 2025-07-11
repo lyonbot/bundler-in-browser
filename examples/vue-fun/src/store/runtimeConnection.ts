@@ -13,6 +13,7 @@ import type { InspectorEditorApi, InspectorRuntimeApi } from '@/abilities/vue-in
 
 export const useRuntimeConnection = defineStore('runtimeConnection', () => {
   const isConnected = ref(false);
+  const errorMessages = ref<{ message: string; file: string }[]>([])
   const bundler = useBundlerController()
   const editorStore = useFileEditorStore()
 
@@ -21,6 +22,10 @@ export const useRuntimeConnection = defineStore('runtimeConnection', () => {
 
     async openFileAndGoTo(path, positionOrRange) {
       editorStore.openFileAndGoTo(path, positionOrRange)
+    },
+
+    async addRuntimeError(err) {
+      errorMessages.value.push(err)
     },
 
     async onModPPressed() {
@@ -118,6 +123,8 @@ export const useRuntimeConnection = defineStore('runtimeConnection', () => {
     const { buildResult, hmrPatch } = bundler.lastBundleOutput;
     if (!buildResult) return;
 
+    errorMessages.value.length = 0
+
     await runtimeApi.updateChunk('vendor', {
       js: buildResult.vendor.js,
       css: buildResult.vendor.css,
@@ -135,7 +142,6 @@ export const useRuntimeConnection = defineStore('runtimeConnection', () => {
       })
       // runtime.api?.freeHMRMemory()  // TODO
     }
-
   }
 
   watch(() => bundler.lastBundleOutput, () => sync())
@@ -145,6 +151,7 @@ export const useRuntimeConnection = defineStore('runtimeConnection', () => {
     isConnected,
     setupConnection,
     sync,
+    errorMessages,
     runtimeApi,
     inspectorApi,
   }

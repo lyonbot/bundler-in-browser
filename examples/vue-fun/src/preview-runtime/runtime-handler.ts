@@ -28,6 +28,7 @@ const actionHandlers = {
 export type EditorActions = {
   notifyReady(): Promise<void>
   openFileAndGoTo(path: string, positionOrRange?: IPosition | IRange): Promise<void>
+  addRuntimeError(err: { message: string, file: string }): Promise<void>
   onModPPressed(): Promise<void>  // Mod+P to pick elements
 }
 export const editorApi = createWorkerDispatcher<EditorActions>((payload, transferable) => runtimeApiPort?.postMessage(payload, transferable))
