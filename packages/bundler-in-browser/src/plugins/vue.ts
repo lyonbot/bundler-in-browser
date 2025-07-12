@@ -432,12 +432,6 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
             descriptor
           ),
         }
-        if (templateCompileOptions && (!instance.options.inlineTemplate || !descriptor.scriptSetup)) {
-          outCodeParts.push(
-            `import { render as ___render } from "${encPath}?type=template";`,
-            `${COMP_IDENTIFIER}.render = ___render`,
-          );
-        }
 
         // script block & script setup block (will be merged into one)
         if (descriptor.script || descriptor.scriptSetup) {
@@ -463,6 +457,14 @@ export default function installVuePlugin(bundler: BundlerInBrowser, opts: Instal
           outCodeParts.push(
             `const ${COMP_IDENTIFIER} = {};`
           )
+        }
+
+        // add render fn after script block
+        if (templateCompileOptions && (!instance.options.inlineTemplate || !descriptor.scriptSetup)) {
+          outCodeParts.push(
+            `import { render as ___render } from "${encPath}?type=template";`,
+            `${COMP_IDENTIFIER}.render = ___render`,
+          );
         }
 
         // hmr
