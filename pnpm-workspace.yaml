@@ -12,3 +12,4 @@ catalog:
 
 overrides:
   volar-service-emmet: file:./overrides/volar-service-emmet
+  volar-service-pug: file:./overrides/volar-service-pug
