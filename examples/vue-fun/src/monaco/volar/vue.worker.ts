@@ -63,6 +63,23 @@ self.onmessage = () => {
 			workspaceFolders: [
 				URI.parse('file:///'),
 			],
+			async getConfiguration(section): Promise<any> {
+				// if (section === 'css.customData') {
+				// 	// https://github.com/volarjs/services/blob/f0253f4f3e3b0b0f1a453f99b354eb9feaec38cd/packages/css/index.ts#L67
+				// 	// https://stackoverflow.com/questions/47607602/how-to-add-a-tailwind-css-rule-to-css-checker/61333686#61333686
+				// 	return ["./path/to/some.json"] // TODO: works with the `fs` above
+				// }
+
+				// https://github.com/volarjs/services/blob/f0253f4f3e3b0b0f1a453f99b354eb9feaec38cd/packages/css/index.ts#L67
+				// https://github.com/microsoft/vscode-css-languageservice/blob/f475d3faf0b9bdf437146ceb329f5c54210da028/src/services/cssValidation.ts#L31
+				if (section === "css" || section === "scss") {
+					return {
+						lint: {
+							unknownAtRules: "ignore"
+						}
+					}
+				}
+			}
 		};
 
 		const asFileName = (uri: URI) => uri.path

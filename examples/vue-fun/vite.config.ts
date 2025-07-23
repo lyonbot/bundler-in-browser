@@ -24,9 +24,11 @@ export default defineConfig({
     include: [
       'vscode-uri', 'monaco-editor-core',
       'shiki', '@volar/monaco', '@volar/monaco/worker',
+      '@zenfs/core', '@zenfs/core/path.js', 'vue/compiler-sfc', '@vue/compiler-core',
+      '@vue/language-core', 'volar-service-typescript',
       'monaco-editor-core/esm/vs/editor/editor.worker', '@vue/language-service',
       'tdesign-vue-next', 'tdesign-icons-vue-next',
-      'typescript', 'sass',
+      'typescript', 'bundler-in-browser > sass',
     ],
     exclude: ['@bundler-in-browser/*', 'bundler-in-browser']
   },
