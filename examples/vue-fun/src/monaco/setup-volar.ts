@@ -61,7 +61,7 @@ languages.onLanguage('vue', () => {
 	});
 
 	const getSyncFiles = () => editor.getModels().map(model => model.uri).filter(p => p.scheme === 'file')
-	const langs = ['vue', 'javascript', 'typescript'];
+	const langs = ['vue', 'javascript', 'typescript', 'css', 'scss', 'less'];
 
 	activateMarkers(worker, langs, 'vue-markers-owner', getSyncFiles, editor as any);
 	activateAutoInsertion(worker, langs, getSyncFiles, editor as any);

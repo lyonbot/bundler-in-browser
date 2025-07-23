@@ -122,6 +122,13 @@ self.onmessage = () => {
 					vueCompilerOptions,
 					asFileName,
 				),
+				{
+					getLanguageId(scriptId) {
+						if (scriptId.path.endsWith('.css')) return 'css'
+						if (scriptId.path.endsWith('.scss')) return 'scss'
+						if (scriptId.path.endsWith('.less')) return 'less'
+					},
+				}
 			],
 			languageServicePlugins: [
 				...vueTsPatch.languageServicePlugins,
