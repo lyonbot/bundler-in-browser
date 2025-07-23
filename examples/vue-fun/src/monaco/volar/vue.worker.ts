@@ -21,28 +21,23 @@ self.onmessage = () => {
 			{ type: '__accessBundlerFs__', payload },
 			transferable,
 		))
+		const mockedFs = {} as { [path: string]: string } // store some in-memory files
 		const fs: FileSystem = {
 			async stat(uri) {
-				// vue language feature needs a virtual type definition file
-				// that provides type definitions like __VLS_PublicProps
-				if (uri.path === vueVLSGlobalTypesFilePath)
+				if (uri.path in mockedFs)
 					return {
-						size: vueVLSGlobalTypesContent.length,
+						size: mockedFs[uri.path].length,
 						ctime: 1,
 						mtime: 1,
 						type: 1 satisfies FileType.File
 					}
-
 				if (uri.path.startsWith('/node_modules'))
 					return await npmFs.stat(uri)
 				return await bundlerFs.stat(uri.path)
 			},
 			async readFile(uri) {
-				// vue language feature needs a virtual type definition file
-				// that provides type definitions like __VLS_PublicProps
-				if (uri.path === vueVLSGlobalTypesFilePath)
-					return vueVLSGlobalTypesContent
-
+				if (uri.path in mockedFs)
+					return mockedFs[uri.path]
 				if (uri.path.startsWith('/node_modules/'))
 					return await npmFs.readFile(uri)
 				return await bundlerFs.readFile(uri.path)
@@ -95,15 +90,12 @@ self.onmessage = () => {
 			allowSyntheticDefaultImports: true,
 		};
 
-		const vueVLSGlobalTypesFilePath = '/node_modules/.vue-global-types.d.ts'
 		const vueCompilerOptions: VueCompilerOptions = ({
 			...getVueDefaultCompilerOptions(),
 			globalTypesPath: () => '.vue-global-types',
 		})
-
-		let vueVLSGlobalTypesContent!: string
 		writeGlobalTypes(vueCompilerOptions, (_, data) => {
-			vueVLSGlobalTypesContent = data
+			mockedFs['/node_modules/.vue-global-types.d.ts'] = data
 		})
 
 		const vueTsPatch = createVueTSPluginClient(ts)
